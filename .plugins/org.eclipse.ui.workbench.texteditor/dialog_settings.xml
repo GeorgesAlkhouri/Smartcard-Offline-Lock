@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<section name="org.eclipse.ui.texteditor.FindReplaceDialog">
+		<item value="false" key="wrap"/>
+		<item value="false" key="isRegEx"/>
+		<item value="false" key="casesensitive"/>
+		<item value="false" key="incremental"/>
+		<item value="false" key="wholeword"/>
+		<item value="258" key="y"/>
+		<item value="DICT_BA_LENGTH" key="selection"/>
+		<item value="1253" key="x"/>
+		<list key="findhistory">
+			<item value="DICT_BA_LENGTH"/>
+		</list>
+		<list value="DICT_BA_LENGTH" key="replacehistory">
+		</list>
+	</section>
+</section>

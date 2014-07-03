@@ -1,0 +1,87 @@
+/** Internes Studienmaterial HTWK Leipzig, F IMN
+ *  SmartCard-Programmierung im Kompetenzfeld Kryptographie und IT-Sicherheit
+ *  Uwe Petermann, HTWK Leipzig, F IMN, uwe@imn.htwk-leipzig.de
+ */
+package queues;
+
+/**
+ * @author Uwe Petermann, HTWK Leipzig, F IMN
+ */
+public class Queue {
+	/** Variablen der Datenstruktur Queues
+	 */
+	public short elem;
+	public short[] q;
+	public short first;
+	public short firstfree;
+	public short maxcap;
+	public short cap; /* "verbleibende Kapazitaet" */
+	
+	public final static short SHORT_LENGTH = (short) 0x02; // length of a short number
+	public final static short QUEUE_MAX_SIZE = (short) 0x7FFF;
+	public final static short QUEUE_INIT_CAP = (short) 10;
+	
+	/** Invarianten der Datenstruktur :
+	 *   0 <= cap <= maxcap <= q.length
+	 *   first < q.length
+	 *   firstfree < q.length
+	 * Begriffsbestimmungen : 
+	 *   belegter Bereich der Warteschlange :
+	 *     falls first <= firstfree :  
+	 *         q[first .. firstfree)
+	 *     falls firstfree < first :
+	 *         q[first .. maxcap) + q[0 .. firstfree)
+	 *   freier Bereich der Warteschlange :
+	 *     falls first <= firstfree :
+	 *         q[0 .. first) + q[firstfree .. maxcap)
+	 *     falls firstfree < first :
+	 *         q[firstfree .. first)
+	 */
+
+	/** Methoden der Datenstruktur
+	 */
+
+	public Queue(){
+		cap = QUEUE_INIT_CAP;
+		q = new short[cap];
+		maxcap = cap;
+		first = 0;
+		firstfree = 0;
+	}
+	public Queue(short cap0){
+		cap = cap0;
+		q = new short[cap];
+		maxcap = cap;
+		first = 0;
+		firstfree = 0;
+	}
+	public boolean empty(){
+		return((cap == maxcap));
+	}
+	public short cap(){
+		return(cap);
+	}
+	public boolean full(){
+		return((cap == 0));
+	}
+	public short head(){
+		if (cap != maxcap)
+			return q[first];
+		else
+			return 0;
+	}
+	public void dequeue(){
+		if (cap != maxcap){
+			q[first] = -1;
+			first = (short) ((first + 1) % maxcap);
+			cap = (short) (cap + 1);
+		}
+	}
+	public void enqueue(short ne){
+		if (cap != 0){
+			q[firstfree] = ne;
+			firstfree = (short) ((firstfree + 1) % maxcap);
+			cap = (short) (cap - 1);
+		}
+	}
+}

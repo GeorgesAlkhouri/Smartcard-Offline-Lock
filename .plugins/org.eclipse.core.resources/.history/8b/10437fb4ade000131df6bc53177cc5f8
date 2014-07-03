@@ -1,0 +1,195 @@
+package hashRandom;
+
+import javacard.framework.APDU;
+import javacard.framework.Applet;
+import javacard.framework.ISO7816;
+import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
+import javacard.framework.Util;
+
+//import javacard.security.KeyBuilder;
+import javacard.security.DESKey;
+import javacard.security.RandomData;
+import javacard.security.MessageDigest;
+import javacard.security.Signature;
+
+import javacardx.crypto.Cipher;
+
+public class HashRandom extends Applet implements ISO7816{
+
+  private static final byte HASH_APPLET_OP_CLA = (byte)0xDF;
+  
+  private static final byte INS_GEN_KEY = (byte)0x02;
+  private static final byte INS_HASH_GEN = (byte)0x08;
+  private static final byte INS_SIGN = (byte)0x06;
+  private static final byte INS_VERIFY = (byte)0x04;
+
+  private static final byte INS_ISSUE = (byte)0x40;
+
+  private static final byte STATE_INIT = 0;
+  private static final byte STATE_ISSUED = 1;
+
+  /** Temporary buffer in RAM. */
+  byte[] tmp;
+
+  /** The applet state (INIT or ISSUED). */
+  byte state;
+
+  /** Key for encryption. */
+  DESKey key;
+
+  /** Cipher for encryption and decryption. */
+  Cipher cipher;
+
+  MessageDigest digest;
+
+  Signature signature;
+  
+  RandomData rd;
+
+  /** Constructor of the applet initialize data of the applet
+   */
+  public HashRandom() {
+    tmp = JCSystem.makeTransientByteArray((short)64,JCSystem.CLEAR_ON_RESET);
+    
+    digest = MessageDigest.getInstance
+    /* RIPEMD 160 bis 2010 sicher (vgl. C. Eckert, IT-Sicherheit) */
+             (MessageDigest.ALG_SHA,false);
+    
+    signature = Signature.getInstance
+                    (Signature.ALG_RSA_SHA_ISO9796, false);
+    
+    rd = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
+
+    state = STATE_INIT;
+  }
+    
+  public static void install(byte[] bArray, short bOffset, byte bLength) {
+    // GP-compliant JavaCard applet registration
+    new HashRandom().register(bArray, (short) (bOffset + 1),
+        bArray[bOffset]);
+  }
+
+  public void process(APDU apdu){
+    // APDU-Bestandteile fuer Verarbeitung aufbereiten
+    byte[] buf = apdu.getBuffer();
+    byte ins = buf[OFFSET_INS];
+    short lc = (short)(buf[OFFSET_LC] & 0x00FF);
+    short le = lc;
+    short lg = 0;
+    short outLength;
+
+    // Good practice: Return 9000 on SELECT
+    if (selectingApplet()) {
+      return;
+    }
+
+    if (buf[OFFSET_CLA] == HASH_APPLET_OP_CLA){
+      // Fallunterscheidung: 
+      switch(state) {
+        // Initialzustand: Schluessel wird initialiert: 
+        case STATE_INIT:
+          switch(ins){
+            case INS_GEN_KEY:             
+              readBuffer(apdu,tmp,(short)0,lc);
+              /* Generate a nonce of given length
+               * => de060000100000000000000000000000000000000010
+               * <= 4A 35 5E EB AC 0D 40 F9 FD 7E 25 8F 7A 31 14 10
+               */
+//              apdu.setOutgoing();
+//              apdu.setOutgoingLength(le);
+              // RandomData rd
+              //  = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
+              rd.generateData(buf, (short) 0, (short) le);
+              apdu.setOutgoing();
+              apdu.setOutgoingLength(le);
+              apdu.sendBytes((short)0,(short) le);
+              break;
+            case INS_ISSUE:
+              state = STATE_ISSUED;
+              break;
+            default:
+              ISOException.throwIt(SW_INS_NOT_SUPPORTED);
+          }
+          break;
+        // Ausgabe erfolgt: Schluesselpaar wird benutzt: 
+        case STATE_ISSUED:
+          switch(ins) {
+            case INS_HASH_GEN:
+              readBuffer(apdu,tmp,(short)0,lc);
+              apdu.setOutgoing();
+              // digest.reset();
+              outLength = digest.doFinal(tmp,(short)0,lc,buf,(short)0);
+              apdu.setOutgoingLength(outLength);
+              apdu.sendBytes((short)0,outLength);
+              break;
+              
+ /*             
+              class MessageDigest
+              md = MessageDigest.getInstance(MessageDigest.ALG SHA, false);
+            •
+              Verfahren: ALG SHA(-1) (20 Bytes), ALG MD5 (16 Bytes)
+            •
+              Hashwert berechnen:
+            •
+              short doFinal(byte[] inBuff, short inOffset, short inLength,
+                              byte[] outBuff, short outOffset)
+*/
+              
+            case INS_SIGN:
+              readBuffer(apdu,tmp,(short)0,lc);
+              apdu.setOutgoing();
+              digest.reset();
+              lg =
+              signature.sign
+                 (/*byte[]inBuff*/ tmp, (short) /*inOffset*/ 0,
+                  /*short inLength*/ lc, /*byte[] sigBuff*/ buf, 
+                          (short) /*sigOffset*/ 0);
+              outLength = digest.doFinal(tmp,(short)0,lc,buf,(short)0);
+              apdu.setOutgoingLength(outLength);
+              apdu.sendBytes((short)0,outLength);
+              break;
+            case INS_VERIFY:
+              readBuffer(apdu,tmp,(short)0,lc);
+              apdu.setOutgoing();
+              cipher.init(key,Cipher.MODE_DECRYPT);
+              outLength = cipher.doFinal(tmp,(short)0,lc,buf,(short)0);
+              apdu.setOutgoingLength(outLength);
+              apdu.sendBytes((short)0,outLength);
+              break;
+            default:
+              ISOException.throwIt(SW_INS_NOT_SUPPORTED);
+          }
+          break;
+        default:
+          ISOException.throwIt(SW_CONDITIONS_NOT_SATISFIED);
+      }
+    }
+  }
+  /**
+   * Copies <code>length</code> bytes of data (starting at
+   * <code>OFFSET_CDATA</code>) from <code>apdu</code> to <code>dest</code>
+   * (starting at <code>offset</code>).
+   *
+   * This method will set <code>apdu</code> to incoming.
+   *
+   * @param apdu the APDU.
+   * @param dest destination byte array.
+   * @param offset offset into the destination byte array.
+   * @param length number of bytes to copy.
+   */
+  private void readBuffer
+  (APDU apdu, byte[] dest, short offset, short length) {
+    byte[] buf = apdu.getBuffer();
+    short readCount = apdu.setIncomingAndReceive();
+    short i = 0;
+    Util.arrayCopy(buf,OFFSET_CDATA,dest,offset,readCount);
+    while ((short)(i + readCount) < length) {
+      i = (short) (i + (readCount));
+      offset = (short) (offset + readCount);
+      readCount = (short)apdu.receiveBytes(OFFSET_CDATA);
+      Util.arrayCopy(buf,OFFSET_CDATA,dest,offset,readCount);
+    }
+  }
+
+}

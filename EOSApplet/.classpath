@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry path="src" kind="src"/>
+	<classpathentry path="com.ibm.bluez.jcop.eclipse.containers.cardconfig/com.ibm.bluez.jcop.eclipse.cardconfigs.njcop" kind="con"/>
+	<classpathentry path="bin" kind="output"/>
+</classpath>
