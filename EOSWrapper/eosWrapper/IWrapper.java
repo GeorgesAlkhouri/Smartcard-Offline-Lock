@@ -4,6 +4,7 @@ import java.util.List;
 
 import eosWrapper.AccessItem.IAccessItem;
 import eosWrapper.Identity.IIdentity;
+import eosWrapper.Util.WeekDay;
 
 public interface IWrapper {
 	boolean shouldOpen(IAccessItem item);

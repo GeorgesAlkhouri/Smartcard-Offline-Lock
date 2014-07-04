@@ -2,8 +2,8 @@ package eosWrapper.AccessItem;
 
 import java.util.List;
 
-import eosWrapper.WeekDay;
 import eosWrapper.Identity.IIdentity;
+import eosWrapper.Util.WeekDay;
 
 public class AccessItem implements IAccessItem {
 
