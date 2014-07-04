@@ -28,3 +28,10 @@ local.properties
 
 # TeXlipse plugin
 .texlipse
+
+#Custom magic
+
+.plugins
+.log
+.lock
+version.ini
