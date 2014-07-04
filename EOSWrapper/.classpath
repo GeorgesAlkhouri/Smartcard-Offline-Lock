@@ -2,7 +2,7 @@
 <classpath>
 	<classpathentry path="" kind="src"/>
 	<classpathentry path="org.eclipse.jdt.launching.JRE_CONTAINER" kind="con"/>
-	<classpathentry path="Z:/Windows XP/SCP Workspace/EOSWrapper/base-core.jar" kind="lib"/>
-	<classpathentry path="Z:/Windows XP/SCP Workspace/EOSWrapper/base-opt.jar" kind="lib"/>
+	<classpathentry path="Z:/Windows XP/SCP Workspace/EOSWrapper/OCF/base-core.jar" kind="lib"/>
+	<classpathentry path="Z:/Windows XP/SCP Workspace/EOSWrapper/OCF/base-opt.jar" kind="lib"/>
 	<classpathentry path="" kind="output"/>
 </classpath>
