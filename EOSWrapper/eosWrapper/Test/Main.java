@@ -1,12 +1,10 @@
 package eosWrapper.Test;
 
-import opencard.core.service.CardRequest;
-import opencard.core.service.CardServiceException;
-import opencard.core.service.SmartCard;
-import opencard.core.terminal.CardTerminalException;
-import opencard.core.util.OpenCardPropertyLoadingException;
+import eosWrapper.Client.TestClient;
 import eosWrapper.Environment.IEnvironment;
 import eosWrapper.Environment.TestLock;
+import eosWrapper.Identity.AdminIdentity;
+import eosWrapper.Identity.GuestIdentity;
 
 public class Main {
 
@@ -15,33 +13,11 @@ public class Main {
 	 */
 	public static void main(String[] args) {
 		IEnvironment testLock = new TestLock();
-		System.out.println(testLock.getWeekDay());
 		
-//		try {
-//			SmartCard.start();
-//			CardRequest cr = new CardRequest(CardRequest.ANYCARD,null,null);
-//			
-//			SmartCard sm = SmartCard.waitForCard(cr);
-//			if (sm != null)
-//				System.out.println("YES");
-//			else
-//				System.out.println("NO");
-//			
-//			SmartCard.shutdown();
-//			
-//		} catch (OpenCardPropertyLoadingException e) {
-//			// TODO Automatisch erstellter Catch-Block
-//			e.printStackTrace();
-//		} catch (CardServiceException e) {
-//			// TODO Automatisch erstellter Catch-Block
-//			e.printStackTrace();
-//		} catch (CardTerminalException e) {
-//			// TODO Automatisch erstellter Catch-Block
-//			e.printStackTrace();
-//		} catch (ClassNotFoundException e) {
-//			// TODO Automatisch erstellter Catch-Block
-//			e.printStackTrace();
-//		}
+		TestClient client = new TestClient(new AdminIdentity("super fucking secret"));
+		client.open(testLock);
+		
+		client = new TestClient(new GuestIdentity("again secret"));
+		client.open(testLock);
 	}
-
 }
