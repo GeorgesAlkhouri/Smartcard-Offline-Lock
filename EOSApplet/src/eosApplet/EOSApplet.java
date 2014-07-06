@@ -13,19 +13,24 @@ public class EOSApplet extends Applet {
 	
 	// INS bytes in the command APDU header
 	private final static byte INS_SHOULD_OPEN = (byte)0x10;
-	//final static byte INS_CREATE_ACCESS_ITEM = (byte)0x20;
-	//final static byte INS_UPDATE_ACCESS_ITEM = (byte)0x30;
+	
+	private final static byte INS_SHOULD_OPEN_GLOBAL = (byte)0x20;
+	private final static byte INS_GET_GLOBAL_ACCESS = (byte)0x22;
+	private final static byte INS_SET_GLOBAL_ACCESS = (byte)0x21;
+	
 	private final static byte INS_PUT_ACCESS_ITEM = (byte)0x30;
 	private final static byte INS_REMOVE_ACCESS_ITEM = (byte)0x40;
-	private final static byte INS_GET_WEEKDAYS = (byte)0x50;
+	private final static byte INS_REMOVE_ALL_ACCESS_ITEMS = (byte)0x41;
 	
+	private final static byte INS_GET_WEEKDAYS = (byte)0x50;
+	private final static byte INS_GET_ACCESS_ITEM_AT_POS = (byte)0x51;
+	private final static byte INS_GET_MAX_SIZE = (byte)0x60;
+	
+	// boolean bytes
 	private final static byte TRUE_BYTE = (byte)0x01;
 	private final static byte FALSE_BYTE = (byte)0x00;
 	
-	//final static byte IDENTITY_BSIZE = 32;
-	//final static byte WEEKDAY_BITMASK_BSIZE = 1;
-	//final static byte ENTRY_COUNT = 100;
-	
+	// entries constants
 	private final static byte MAX_SIZE = 4; // entries possible
 	private final static byte KEY_BYTE_SIZE = 32; // hash
 	private final static byte VALUE_BYTE_SIZE = 1; // weekday bitmask
@@ -33,6 +38,7 @@ public class EOSApplet extends Applet {
 	private final static short MAX_BYTE_SIZE = (short) (ENTRY_BYTE_SIZE * MAX_SIZE);
 
     private byte[] entries; // array in EEPROM
+    private byte globalAccessItem; // byte in EEPROM
     
     private final static byte[] EMPTY_ENTRY = new byte[] {
     	0,0,0,0,0,0,0,0,
@@ -41,7 +47,7 @@ public class EOSApplet extends Applet {
     	0,0,0,0,0,0,0,0,
     	0};
     
-    // c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d7
+    // admin identity token c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d7
     private final static byte[] ADMIN_IDENTITY = new byte[] {
     	(byte)0xc6, (byte)0x62, (byte)0x1e, (byte)0x59, (byte)0x6b, (byte)0x69, (byte)0xdb, (byte)0x6a, 
     	(byte)0xe3, (byte)0xd1, (byte)0x70, (byte)0x3c, (byte)0x26, (byte)0xa5, (byte)0x28, (byte)0xcc, 
@@ -51,6 +57,7 @@ public class EOSApplet extends Applet {
 	
 	private EOSApplet() {
 		this.entries = new byte[MAX_BYTE_SIZE];
+		this.globalAccessItem = (byte)0x00; 
 		register();
 	}
 
@@ -83,11 +90,15 @@ public class EOSApplet extends Applet {
 
 		switch (buffer[ISO7816.OFFSET_INS]) {
 		case INS_SHOULD_OPEN: shouldOpen(apdu); return;
-		//case INS_CREATE_ACCESS_ITEM: createAccessItem(apdu); return;
-		//case INS_UPDATE_ACCESS_ITEM: updateAccessItem(apdu); return;
 		case INS_PUT_ACCESS_ITEM: putAccessItem(apdu); return;
 		case INS_REMOVE_ACCESS_ITEM: removeAccessItem(apdu); return;
 		case INS_GET_WEEKDAYS: getWeekdays(apdu); return;
+		case INS_SHOULD_OPEN_GLOBAL: shouldOpenGlobal(apdu); return;
+		case INS_GET_GLOBAL_ACCESS: getGlobalAccessItem(apdu); return;
+		case INS_SET_GLOBAL_ACCESS: setGlobalAccessItem(apdu); return;
+		case INS_REMOVE_ALL_ACCESS_ITEMS: removeAllAccessItems(apdu); return;
+		case INS_GET_ACCESS_ITEM_AT_POS: getAccessItemAtPos(apdu); return;
+		case INS_GET_MAX_SIZE: getMaxSize(apdu); return;
 		
 		case (byte)0x90: debugGetAll(apdu); return;
 		
@@ -98,6 +109,7 @@ public class EOSApplet extends Applet {
 	}
 	
 	
+	// TODO only for debugging C090000084
 	private void debugGetAll(APDU apdu) {
 		byte[] buffer = apdu.getBuffer();
 		short le = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
@@ -151,6 +163,89 @@ public class EOSApplet extends Applet {
     		buffer[0] = ((currentWeekdayMask & weekdayBitmask) != 0) ? TRUE_BYTE : FALSE_BYTE;
     	}
     	apdu.setOutgoingAndSend((short) 0, (short) 1);
+	}
+
+	
+	// ask if every identity is granted access on this specific weekday
+	// no admin identity required
+	
+	// Weekday Bitmask: <Monday> <Tuesday> <Wednesday> <Thursday> <Friday> <Saturday> <Sunday> <ignored>
+	// Example: 11111000(2) -> f8(16)
+	// Current Weekday: number of weekday between 01 (Monday) .. 07 (Sunday)
+	
+	// Command-APDU: C0 20 <1 byte current weekday> 00
+	// Example: C0200600
+	
+	// Response-APDUs: 
+	// No error: <1 byte (01 ... true, 00 ... false)> <2 bytes SW_NO_ERROR>   Example: 019000
+	// Invalid current weekday: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+
+	private void shouldOpenGlobal(APDU apdu) {
+		byte[] buffer = apdu.getBuffer();
+		
+		byte currentWeekday = buffer[ISO7816.OFFSET_P1];
+		// test for valid current weekday
+		if (currentWeekday < 1 || currentWeekday > 7) ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+		// create a current weekday mask by shifting msb
+		byte currentWeekdayMask = (byte) ((short)0x80 >>> (currentWeekday - 1));
+		byte weekdayBitmask = globalAccessItem;
+		// Example:
+		// currentWeekdayMask: 0001000
+		// weekdayBitmask: 1101001
+		// currentWeekday & weekdayBitmask: 0001000 != 0
+		buffer[0] = ((currentWeekdayMask & weekdayBitmask) != 0) ? TRUE_BYTE : FALSE_BYTE;
+    	apdu.setOutgoingAndSend((short) 0, (short) 1);
+	}
+	
+	
+	// get global access item
+	// admin identitiy required
+
+	// Weekday Bitmask: <Monday> <Tuesday> <Wednesday> <Thursday> <Friday> <Saturday> <Sunday> <ignored>
+	// Example: 11111000(2) -> f8(16)
+	
+	// Command-APDU: C0 22 00 00 20 <32 bytes sha-256 hashed admin identity token> 01
+	// Example: C022000020c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d701
+	
+	// Response-APDUs:
+	// No error: <1 byte weekday bitmask> <2 bytes SW_NO_ERROR>   Bytes: 9000
+	// Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
+	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+
+	private void getGlobalAccessItem(APDU apdu) {
+		byte[] buffer = apdu.getBuffer();
+		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
+		if (lc != ADMIN_IDENTITY.length) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+		
+		if (!isAdminIdentity(buffer, ISO7816.OFFSET_CDATA)) ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+
+		buffer[0] = globalAccessItem;
+		apdu.setOutgoingAndSend((short) 0, VALUE_BYTE_SIZE);
+	}
+	
+
+	// set global access item
+	// admin identitiy required
+
+	// Weekday Bitmask: <Monday> <Tuesday> <Wednesday> <Thursday> <Friday> <Saturday> <Sunday> <ignored>
+	// Example: 11111000(2) -> f8(16)
+	
+	// Command-APDU: C0 21 <1 byte weekday bitmask> 00 20 <32 bytes sha-256 hashed admin identity token>
+	// Example: C021f80020c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d7
+	
+	// Response-APDUs:
+	// No error: <2 bytes SW_NO_ERROR>   Bytes: 9000
+	// Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
+	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+
+	private void setGlobalAccessItem(APDU apdu) {
+		byte[] buffer = apdu.getBuffer();
+		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
+		if (lc != ADMIN_IDENTITY.length) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+		
+		if (!isAdminIdentity(buffer, ISO7816.OFFSET_CDATA)) ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+
+		globalAccessItem = buffer[ISO7816.OFFSET_P1];
 	}
 
 	
@@ -230,8 +325,33 @@ public class EOSApplet extends Applet {
         	Util.arrayCopy(EMPTY_ENTRY, (short) 0, entries, pos, ENTRY_BYTE_SIZE);
     	}
 	}
-
 	
+
+	// remove all access items by overriding with 0
+	// admin identitiy required
+
+	// Command-APDU: C0 41 00 00 20 <32 bytes sha-256 hashed admin identity token>
+	// Example: C041000020c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d7
+
+	// Response-APDUs:
+	// No error: <2 bytes SW_NO_ERROR>   Bytes: 9000
+	// Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
+	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+	
+	private void removeAllAccessItems(APDU apdu) {
+		byte[] buffer = apdu.getBuffer();
+		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
+		if (lc != ADMIN_IDENTITY.length) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+		
+		if (!isAdminIdentity(buffer, ISO7816.OFFSET_CDATA)) ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+		
+		// overriding with 0s by using arrayCopy
+		for (short pos = 0; pos < entries.length; pos = (short) (pos + ENTRY_BYTE_SIZE)) {
+			Util.arrayCopy(EMPTY_ENTRY, (short) 0, entries, pos, ENTRY_BYTE_SIZE);
+		}
+	}
+	
+
 	// get weekday bitmask for specific identity
 	// admin identitiy required
 	
@@ -270,46 +390,72 @@ public class EOSApplet extends Applet {
 	}
 	
 	
+	// get access item at pos in entries buffer
+	// admin identitiy required
 	
-	
-	/*
-    private boolean containsKey(byte[] keyArr, short keyOff) {
-    	short pos = findPosition(
-    			keyArr, keyOff, KEY_BYTE_SIZE, 
-    			ENTRY_BYTE_SIZE, 
-    			entries, (short) 0, MAX_BYTE_SIZE);
-    	if (pos == entries.length) {
-    		// the key does not exist
-    		return false;
-    	} else {
-    		return true;
-    	}
-    }
+	// Weekday Bitmask: <Monday> <Tuesday> <Wednesday> <Thursday> <Friday> <Saturday> <Sunday> <ignored>
+	// Example: 11111000(2) -> f8(16)
 
-    // containsKey should be used before to test existence of key
-    // if not found the return value is undefined
-    public byte get(byte[] keyArr, short keyOff) {
-    	
-    	short pos = findPosition(
-    			keyArr, keyOff, KEY_BYTE_SIZE, 
-    			ENTRY_BYTE_SIZE, 
-    			entries, (short) 0, MAX_BYTE_SIZE);
-    	if (pos == entries.length) {
-    		// the key does not exist
-    		// the return value is undefined (containsKey should be used before)
-    		// returning first entry
-    		pos = 0;
-    	}
-    	// setting position to value of entry
-    	pos = (short) (pos + KEY_BYTE_SIZE);
-    	
-        return entries[pos];
-    }
-    */
+	// Command-APDU: C0 51 <2 bytes position (start 0)> 20 <32 bytes sha-256 hashed admin identity token> 21
+	// Example: C051000320c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d721
+	
+	// Response-APDUs:
+	// No error: <32 bytes sha-256 hashed identity token> <1 byte weekday bitmask> <2 bytes SW_NO_ERROR>   Example: 4cede21074b1a48da2b0a19a0a3752f8bae500d348e4effe6932e2e26666fe77049000
+	// Not found or empty: <2 bytes SW_RECORD_NOT_FOUND>   Bytes: 6a83
+	// Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
+	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+	
+	private void getAccessItemAtPos(APDU apdu) {
+		byte[] buffer = apdu.getBuffer();
+		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
+		if (lc != ADMIN_IDENTITY.length) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+		
+		if (!isAdminIdentity(buffer, ISO7816.OFFSET_CDATA)) ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+		
+		short pos = (short) (Util.makeShort(buffer[ISO7816.OFFSET_P1], buffer[ISO7816.OFFSET_P2]) * ENTRY_BYTE_SIZE);
+		if (pos + ENTRY_BYTE_SIZE <= entries.length) {
+			
+			short lessEqualGreater = Util.arrayCompare(EMPTY_ENTRY, (short) 0, entries, pos, ENTRY_BYTE_SIZE);
+    		if (lessEqualGreater == 0) {
+    			// entry at this pos is empty
+    			ISOException.throwIt(ISO7816.SW_RECORD_NOT_FOUND);
+    		}
+    		// copy non atomic, because we are reading from entries in this case
+    		Util.arrayCopyNonAtomic(entries, pos, buffer, (short) 0, ENTRY_BYTE_SIZE);
+        	apdu.setOutgoingAndSend((short) 0, ENTRY_BYTE_SIZE);
+		} else {
+			ISOException.throwIt(ISO7816.SW_RECORD_NOT_FOUND);
+		}
+	}
+	
+	
+	// get max size of entries buffer
+	// admin identitiy required
+	
+	// Command-APDU: C0 60 00 00 20 <32 bytes sha-256 hashed admin identity token> 02
+	// Example: C060000020c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d702
+	
+	// Response-APDUs:
+	// No error: <2 bytes max size count> <2 bytes SW_NO_ERROR>   Example: 00049000
+	// Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
+	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+
+	private void getMaxSize(APDU apdu) {
+		byte[] buffer = apdu.getBuffer();
+		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
+		if (lc != ADMIN_IDENTITY.length) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
+		
+		if (!isAdminIdentity(buffer, ISO7816.OFFSET_CDATA)) ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+		
+		Util.setShort(buffer, (short) 0, (short) MAX_SIZE);
+		// sending short value: 2 bytes
+		apdu.setOutgoingAndSend((short) 0, (short) 2);
+	}
+	
+
     
     
-    
-    
+    // check if given identity is admin identity using arrayCompare
     private boolean isAdminIdentity(byte[] idArr, short idOff) {
     	return (Util.arrayCompare(
     		idArr, idOff, 
