@@ -19,5 +19,8 @@ public class Main {
 		
 		client = new TestClient(new GuestIdentity("again secret"));
 		client.open(testLock);
+		
+		//Prevents bug - http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=6476706
+		System.exit(0);
 	}
 }
