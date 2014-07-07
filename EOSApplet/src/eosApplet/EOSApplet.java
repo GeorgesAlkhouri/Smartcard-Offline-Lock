@@ -5,6 +5,7 @@ import javacard.framework.Applet;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
 import javacard.framework.Util;
+import javacard.security.RandomData;
 
 public class EOSApplet extends Applet {
 	
@@ -12,8 +13,9 @@ public class EOSApplet extends Applet {
 	private final static byte CORE_CLA = (byte) 0xC0;
 	
 	// INS bytes in the command APDU header
+	private final static byte INS_GET_COMMAND_NONCE = (byte)0x01;
+
 	private final static byte INS_SHOULD_OPEN = (byte)0x10;
-	
 	private final static byte INS_SHOULD_OPEN_GLOBAL = (byte)0x20;
 	private final static byte INS_GET_GLOBAL_ACCESS = (byte)0x22;
 	private final static byte INS_SET_GLOBAL_ACCESS = (byte)0x21;
@@ -31,8 +33,8 @@ public class EOSApplet extends Applet {
 	private final static byte FALSE_BYTE = (byte)0x00;
 	
 	// entries constants
-	private final static byte MAX_SIZE = 4; // entries possible
-	private final static byte KEY_BYTE_SIZE = 32; // hash
+	private final static byte MAX_SIZE = 10; // entries possible
+	private final static byte KEY_BYTE_SIZE = 8; // identity
 	private final static byte VALUE_BYTE_SIZE = 1; // weekday bitmask
 	private final static byte ENTRY_BYTE_SIZE = (byte) (KEY_BYTE_SIZE + VALUE_BYTE_SIZE);
 	private final static short MAX_BYTE_SIZE = (short) (ENTRY_BYTE_SIZE * MAX_SIZE);
@@ -40,24 +42,26 @@ public class EOSApplet extends Applet {
     private byte[] entries; // array in EEPROM
     private byte globalAccessItem; // byte in EEPROM
     
-    private final static byte[] EMPTY_ENTRY = new byte[] {
-    	0,0,0,0,0,0,0,0,
-    	0,0,0,0,0,0,0,0,
-    	0,0,0,0,0,0,0,0,
-    	0,0,0,0,0,0,0,0,
-    	0};
+    private final static byte[] EMPTY_ENTRY = new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
     
-    // admin identity token c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d7
+    // admin identity token: meister1 in hex: 6d 65 69 73 74 65 72 31 
     private final static byte[] ADMIN_IDENTITY = new byte[] {
-    	(byte)0xc6, (byte)0x62, (byte)0x1e, (byte)0x59, (byte)0x6b, (byte)0x69, (byte)0xdb, (byte)0x6a, 
-    	(byte)0xe3, (byte)0xd1, (byte)0x70, (byte)0x3c, (byte)0x26, (byte)0xa5, (byte)0x28, (byte)0xcc, 
-    	(byte)0x0a, (byte)0xfd, (byte)0x7c, (byte)0x35, (byte)0x8b, (byte)0x08, (byte)0x92, (byte)0xa8, 
-    	(byte)0x1b, (byte)0x8e, (byte)0x38, (byte)0xdf, (byte)0x6e, (byte)0x6c, (byte)0xb3, (byte)0xd7
+    	(byte)0x6d, (byte)0x65, (byte)0x69, (byte)0x73, (byte)0x74, (byte)0x65, (byte)0x72, (byte)0x31
     };
+
+    // for nonce handling
+    private static final byte NONCE_LENGTH = (byte)0x02;
+    private boolean commandNonceIsValid = false;
+    private short commandNonce;
+    private RandomData randomData;
 	
+
+	// applet constructor
 	private EOSApplet() {
-		this.entries = new byte[MAX_BYTE_SIZE];
-		this.globalAccessItem = (byte)0x00; 
+		entries = new byte[MAX_BYTE_SIZE];
+		globalAccessItem = (byte)0x00;
+		randomData = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
+
 		register();
 	}
 
@@ -72,6 +76,10 @@ public class EOSApplet extends Applet {
 		
 		// returns true to JCRE to indicate that the applet
 		// is ready to accept incoming APDUs
+
+		// set nonce to invalid state
+		commandNonceIsValid = false;
+
 		return true;
 	}
 
@@ -80,6 +88,8 @@ public class EOSApplet extends Applet {
 		if (selectingApplet()) {
 			return;
 		}
+		
+		decryptCommandAPDU(apdu);
 
 		byte[] buffer = apdu.getBuffer();
 		
@@ -89,6 +99,7 @@ public class EOSApplet extends Applet {
 		}
 
 		switch (buffer[ISO7816.OFFSET_INS]) {
+		case INS_GET_COMMAND_NONCE: getCommandNonce(apdu); return;
 		case INS_SHOULD_OPEN: shouldOpen(apdu); return;
 		case INS_PUT_ACCESS_ITEM: putAccessItem(apdu); return;
 		case INS_REMOVE_ACCESS_ITEM: removeAccessItem(apdu); return;
@@ -120,6 +131,23 @@ public class EOSApplet extends Applet {
 		apdu.sendBytesLong(entries, (short) 0, (short) le);
 	}
 
+
+	// get command nonce for sending with next apdu
+	
+	// Command-APDU: C0 01 00 00 01
+	// Example: C001000001
+
+	// Response-APDUs: 
+	// No error: <2 bytes command nonce> <2 bytes SW_NO_ERROR>   Example: 58A09000
+
+	private void getCommandNonce(APDU apdu) {
+		byte[] buffer = apdu.getBuffer();
+		randomData.generateData(buffer, (short) 0, NONCE_LENGTH);
+		commandNonce = Util.makeShort(buffer[0], buffer[1]);
+		commandNonceIsValid = true;
+		apdu.setOutgoingAndSend((short) 0, (short) NONCE_LENGTH);
+	}
+
 	
 	// ask if identity is granted access on this specific weekday
 	// no admin identity required
@@ -128,7 +156,7 @@ public class EOSApplet extends Applet {
 	// Example: 11111000(2) -> f8(16)
 	// Current Weekday: number of weekday between 01 (Monday) .. 07 (Sunday)
 	
-	// Command-APDU: C0 10 <1 byte current weekday> 00 20 <32 bytes sha-256 hashed identity token> 01
+	// Command-APDU: C0 10 <1 byte current weekday> 00 20 <8 bytes identity token> 01
 	// Example: C0100600204cede21074b1a48da2b0a19a0a3752f8bae500d348e4effe6932e2e26666fe7701
 	
 	// Response-APDUs: 
@@ -204,7 +232,7 @@ public class EOSApplet extends Applet {
 	// Weekday Bitmask: <Monday> <Tuesday> <Wednesday> <Thursday> <Friday> <Saturday> <Sunday> <ignored>
 	// Example: 11111000(2) -> f8(16)
 	
-	// Command-APDU: C0 22 00 00 20 <32 bytes sha-256 hashed admin identity token> 01
+	// Command-APDU: C0 22 00 00 20 <8 bytes admin token> 01
 	// Example: C022000020c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d701
 	
 	// Response-APDUs:
@@ -230,7 +258,7 @@ public class EOSApplet extends Applet {
 	// Weekday Bitmask: <Monday> <Tuesday> <Wednesday> <Thursday> <Friday> <Saturday> <Sunday> <ignored>
 	// Example: 11111000(2) -> f8(16)
 	
-	// Command-APDU: C0 21 <1 byte weekday bitmask> 00 20 <32 bytes sha-256 hashed admin identity token>
+	// Command-APDU: C0 21 <1 byte weekday bitmask> 00 20 <8 bytes admin token>
 	// Example: C021f80020c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d7
 	
 	// Response-APDUs:
@@ -255,7 +283,7 @@ public class EOSApplet extends Applet {
 	// Weekday Bitmask: <Monday> <Tuesday> <Wednesday> <Thursday> <Friday> <Saturday> <Sunday> <ignored>
 	// Example: 11111000(2) -> f8(16)
 	
-	// Command-APDU: C0 30 00 00 41 <32 bytes sha-256 hashed admin identity token> <32 bytes sha-256 hashed identity token> <1 byte weekday bitmask>
+	// Command-APDU: C0 30 00 00 41 <8 bytes admin token> <8 bytes identity token> <1 byte weekday bitmask>
 	// Example: C030000041c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d74cede21074b1a48da2b0a19a0a3752f8bae500d348e4effe6932e2e26666fe7706
 	
 	// Response-APDUs:
@@ -296,7 +324,7 @@ public class EOSApplet extends Applet {
 	// remove access item for specific identity
 	// admin identitiy required
 	
-	// Command-APDU: C0 40 00 00 40 <32 bytes sha-256 hashed admin identity token> <32 bytes sha-256 hashed identity token>
+	// Command-APDU: C0 40 00 00 40 <8 bytes admin token> <8 bytes identity token>
 	// Example: C040000040c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d74cede21074b1a48da2b0a19a0a3752f8bae500d348e4effe6932e2e26666fe77
 	
 	// Response-APDUs:
@@ -330,7 +358,7 @@ public class EOSApplet extends Applet {
 	// remove all access items by overriding with 0
 	// admin identitiy required
 
-	// Command-APDU: C0 41 00 00 20 <32 bytes sha-256 hashed admin identity token>
+	// Command-APDU: C0 41 00 00 20 <8 bytes admin token>
 	// Example: C041000020c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d7
 
 	// Response-APDUs:
@@ -358,7 +386,7 @@ public class EOSApplet extends Applet {
 	// Weekday Bitmask: <Monday> <Tuesday> <Wednesday> <Thursday> <Friday> <Saturday> <Sunday> <ignored>
 	// Example: 11111000(2) -> f8(16)
 
-	// Command-APDU: C0 50 00 00 40 <32 bytes sha-256 hashed admin identity token> <32 bytes sha-256 hashed identity token> 01
+	// Command-APDU: C0 50 00 00 40 <8 bytes admin token> <8 bytes identity token> 01
 	// Example: C050000040c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d74cede21074b1a48da2b0a19a0a3752f8bae500d348e4effe6932e2e26666fe7701
 	
 	// Response-APDUs:
@@ -396,11 +424,11 @@ public class EOSApplet extends Applet {
 	// Weekday Bitmask: <Monday> <Tuesday> <Wednesday> <Thursday> <Friday> <Saturday> <Sunday> <ignored>
 	// Example: 11111000(2) -> f8(16)
 
-	// Command-APDU: C0 51 <2 bytes position (start 0)> 20 <32 bytes sha-256 hashed admin identity token> 21
+	// Command-APDU: C0 51 <2 bytes position (start 0)> 20 <8 bytes admin token> 21
 	// Example: C051000320c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d721
 	
 	// Response-APDUs:
-	// No error: <32 bytes sha-256 hashed identity token> <1 byte weekday bitmask> <2 bytes SW_NO_ERROR>   Example: 4cede21074b1a48da2b0a19a0a3752f8bae500d348e4effe6932e2e26666fe77049000
+	// No error: <8 bytes identity token> <1 byte weekday bitmask> <2 bytes SW_NO_ERROR>   Example: 4cede21074b1a48da2b0a19a0a3752f8bae500d348e4effe6932e2e26666fe77049000
 	// Not found or empty: <2 bytes SW_RECORD_NOT_FOUND>   Bytes: 6a83
 	// Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
 	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
@@ -432,7 +460,7 @@ public class EOSApplet extends Applet {
 	// get max size of entries buffer
 	// admin identitiy required
 	
-	// Command-APDU: C0 60 00 00 20 <32 bytes sha-256 hashed admin identity token> 02
+	// Command-APDU: C0 60 00 00 20 <8 bytes admin token> 02
 	// Example: C060000020c6621e596b69db6ae3d1703c26a528cc0afd7c358b0892a81b8e38df6e6cb3d702
 	
 	// Response-APDUs:
@@ -453,7 +481,43 @@ public class EOSApplet extends Applet {
 	}
 	
 
+	
+	
+	private void decryptCommandAPDU(APDU apdu) {
+		byte[] buffer = apdu.getBuffer();
+		short receivedCommandNonce = Util.makeShort(buffer[0], buffer[1]);
+		short receivedResponseNonce = Util.makeShort(buffer[2], buffer[3]);
+		
+		byte insByte = buffer[5];
+		// no valid nonce is required when getting one
+		if ((insByte != INS_GET_COMMAND_NONCE) && 
+			(!commandNonceIsValid || (receivedCommandNonce != commandNonce))) {
+			ISOException.throwIt(ISO7816.SW_WRONG_DATA);
+		}
+		
+		// 2. Byte-Array entschlüsseln -> <Command-Nonce><Response-Nonce><Command-APDU>
+		// 3. Command-Nonce mit gespeichertem Command-Nonce vergleichen
+		// 4. Gespeichertes Command-Nonce zurücksetzen
+		// 4a. Wenn gleich, dann Command-APDU auswerten
+		// 4b. Sonst Fehler
+		
+		
+	}
+	
+	private void encryptResponseAPDU(APDU apdu) {
+		
+		// 5. Wenn ausgewertet, dann <Response-Nonce><Response-APDU> verschlüsseln
+		// 6. Senden von verschlüsseltem Byte Array
+	}
     
+	
+	// check sent command nonce
+	
+	private void checkCommandNonce(APDU apdu) {
+		byte[] buffer = apdu.getBuffer();
+		
+	}
+	
     
     // check if given identity is admin identity using arrayCompare
     private boolean isAdminIdentity(byte[] idArr, short idOff) {
