@@ -1,5 +1,10 @@
 package eosWrapper;
 
+import java.io.UnsupportedEncodingException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import opencard.core.terminal.CommandAPDU;
@@ -12,25 +17,20 @@ import eosWrapper.Util.WeekDay;
 
 public class GeneralWrapper extends Wrapper {
 
-//	private final static byte[] APPLET_AID = {'T','E','S','T'};
-//	private final static byte[] SELECT_APDU = {0x00,0x01};
-	private final static byte[] SHOULD_OPEN_APDU = {0x00,0x02};
-		
 	@Override
-	public boolean shouldOpen(IAccessItem item) throws Exception {
-		// TODO Automatisch erstellter Methoden-Stub
-		return false;
+	public boolean shouldOpen(IAccessItem item, WeekDay day) throws Exception {
+		return shouldOpen(item.getIdentity(), day);
 	}
 	@Override
 	public boolean shouldOpen(IIdentity id, WeekDay day) throws Exception {
-		CommandAPDU command = new CommandAPDU(SHOULD_OPEN_APDU);
-		
-		allocateCardChannel();
-		ResponseAPDU response = getCardChannel().sendCommandAPDU(command); 
-		String result = HexString.hexifyShort(response.sw1(),response.sw2());
-		if (result.equals(""))
-			return true;
-		else
+//		CommandAPDU command = new CommandAPDU(SHOULD_OPEN_APDU);
+//		
+//		allocateCardChannel();
+//		ResponseAPDU response = getCardChannel().sendCommandAPDU(command); 
+//		String result = HexString.hexifyShort(response.sw1(),response.sw2());
+//		if (result.equals(""))
+//			return true;
+//		else
 			return false;
 	}
 	@Override
@@ -73,5 +73,22 @@ public class GeneralWrapper extends Wrapper {
 		// TODO Automatisch erstellter Methoden-Stub
 		
 	}
+	
+	// Privates
+	
+//	private ArrayList hashIdentity(IIdentity id) {
+//		try {
+//			MessageDigest md = MessageDigest.getInstance("SHA-256");
+//			md.update(id.getToken().getBytes("UTF-8"));
+//			byte[] digest = md.digest();
+//			return new ArrayList(Arrays.asList(digest));
+//		} catch (NoSuchAlgorithmException e) {
+//			// TODO Automatisch erstellter Catch-Block
+//			e.printStackTrace();
+//		} catch (UnsupportedEncodingException e) {
+//			// TODO Automatisch erstellter Catch-Block
+//			e.printStackTrace();
+//		}
+//	}
 	
 }

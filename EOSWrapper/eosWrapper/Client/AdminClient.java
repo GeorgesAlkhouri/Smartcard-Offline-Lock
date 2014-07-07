@@ -4,10 +4,10 @@ import eosWrapper.GeneralWrapper;
 import eosWrapper.Environment.IEnvironment;
 import eosWrapper.Identity.IIdentity;
 
-public class TestClient implements IClient {
+public class AdminClient implements IClient {
 
 	private final IIdentity id;
-	public TestClient(IIdentity id) {
+	public AdminClient(IIdentity id) {
 		this.id = id;
 	}
 	
