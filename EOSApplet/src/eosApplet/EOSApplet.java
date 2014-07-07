@@ -4,7 +4,6 @@ import javacard.framework.APDU;
 import javacard.framework.Applet;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
-import javacard.framework.JCSystem;
 import javacard.framework.Util;
 import javacard.security.RandomData;
 
@@ -56,7 +55,7 @@ public class EOSApplet extends Applet {
     private short commandNonce;
     private RandomData randomData;
     
-    private byte[] originalAPDU;
+    //private byte[] originalAPDU;
 	
 
 	// applet constructor
@@ -64,7 +63,7 @@ public class EOSApplet extends Applet {
 		entries = new byte[MAX_BYTE_SIZE];
 		globalAccessItem = (byte)0x00;
 		randomData = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
-		originalAPDU = JCSystem.makeTransientByteArray((short) 200, JCSystem.CLEAR_ON_DESELECT);
+		//originalAPDU = JCSystem.makeTransientByteArray((short) 200, JCSystem.CLEAR_ON_DESELECT);
 
 		register();
 	}
@@ -95,13 +94,13 @@ public class EOSApplet extends Applet {
 		
 		decryptCommandAPDU(apdu);
 
-		byte[] buffer = originalAPDU;
+		byte[] buffer = apdu.getBuffer();
 		
 		// verify that the applet can accept this APDU message
 		if (buffer[ISO7816.OFFSET_CLA] != CORE_CLA) {
 			ISOException.throwIt(ISO7816.SW_CLA_NOT_SUPPORTED);
 		}
-
+		
 		switch (buffer[ISO7816.OFFSET_INS]) {
 		case INS_GET_COMMAND_NONCE: getCommandNonce(apdu); return;
 		case INS_SHOULD_OPEN: shouldOpen(apdu); return;
@@ -126,7 +125,7 @@ public class EOSApplet extends Applet {
 	
 	// TODO only for debugging C090000084
 	private void debugGetAll(APDU apdu) {
-		byte[] buffer = originalAPDU;
+		byte[] buffer = apdu.getBuffer();
 		short le = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
 		if (le != MAX_BYTE_SIZE) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
 
@@ -169,7 +168,7 @@ public class EOSApplet extends Applet {
 	// Invalid current weekday: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
 	
 	private void shouldOpen(APDU apdu) {
-		byte[] buffer = originalAPDU;
+		byte[] buffer = apdu.getBuffer();
 		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
 		if (lc != KEY_BYTE_SIZE) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
 		
@@ -213,7 +212,7 @@ public class EOSApplet extends Applet {
 	// Invalid current weekday: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
 
 	private void shouldOpenGlobal(APDU apdu) {
-		byte[] buffer = originalAPDU;
+		byte[] buffer = apdu.getBuffer();
 		
 		byte currentWeekday = buffer[ISO7816.OFFSET_P1];
 		// test for valid current weekday
@@ -245,7 +244,7 @@ public class EOSApplet extends Applet {
 	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
 
 	private void getGlobalAccessItem(APDU apdu) {
-		byte[] buffer = originalAPDU;
+		byte[] buffer = apdu.getBuffer();
 		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
 		if (lc != ADMIN_IDENTITY.length) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
 		
@@ -271,7 +270,7 @@ public class EOSApplet extends Applet {
 	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
 
 	private void setGlobalAccessItem(APDU apdu) {
-		byte[] buffer = originalAPDU;
+		byte[] buffer = apdu.getBuffer();
 		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
 		if (lc != ADMIN_IDENTITY.length) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
 		
@@ -297,7 +296,7 @@ public class EOSApplet extends Applet {
 	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
 
 	private void putAccessItem(APDU apdu) {
-		byte[] buffer = originalAPDU;
+		byte[] buffer = apdu.getBuffer();
 		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
 		if (lc != (ADMIN_IDENTITY.length + ENTRY_BYTE_SIZE)) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
 		
@@ -338,7 +337,7 @@ public class EOSApplet extends Applet {
 	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
 	
 	private void removeAccessItem(APDU apdu) {
-		byte[] buffer = originalAPDU;
+		byte[] buffer = apdu.getBuffer();
 		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
 		if (lc != (ADMIN_IDENTITY.length + KEY_BYTE_SIZE)) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
 		
@@ -371,7 +370,7 @@ public class EOSApplet extends Applet {
 	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
 	
 	private void removeAllAccessItems(APDU apdu) {
-		byte[] buffer = originalAPDU;
+		byte[] buffer = apdu.getBuffer();
 		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
 		if (lc != ADMIN_IDENTITY.length) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
 		
@@ -400,7 +399,7 @@ public class EOSApplet extends Applet {
 	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
 	
 	private void getWeekdays(APDU apdu) {
-		byte[] buffer = originalAPDU;
+		byte[] buffer = apdu.getBuffer();
 		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
 		if (lc != (ADMIN_IDENTITY.length + KEY_BYTE_SIZE)) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
 		
@@ -438,7 +437,7 @@ public class EOSApplet extends Applet {
 	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
 	
 	private void getAccessItemAtPos(APDU apdu) {
-		byte[] buffer = originalAPDU;
+		byte[] buffer = apdu.getBuffer();
 		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
 		if (lc != ADMIN_IDENTITY.length) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
 		
@@ -473,7 +472,7 @@ public class EOSApplet extends Applet {
 	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
 
 	private void getMaxSize(APDU apdu) {
-		byte[] buffer = originalAPDU;
+		byte[] buffer = apdu.getBuffer();
 		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
 		if (lc != ADMIN_IDENTITY.length) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
 		
@@ -496,17 +495,19 @@ public class EOSApplet extends Applet {
 		short receivedResponseNonce = Util.makeShort(buffer[2], buffer[3]);
 		short length = (short) buffer.length;
 
-		// copy original APDU into RAM
-		Util.arrayCopyNonAtomic(buffer, (short) 4, originalAPDU, (short) 0, (short) 200);
-//		Util.arrayCopyNonAtomic(originalAPDU, (short) 0, buffer, (short) 0, (short) (length - 4));
+		// truncate nonces
+		// TODO length ?
+		Util.arrayCopyNonAtomic(buffer, (short) 4, buffer, (short) 0, (short) 200);
 
 		
-		byte insByte = buffer[5];
+		byte insByte = buffer[ISO7816.OFFSET_INS];
 		// no valid nonce is required when getting one
 		if ((insByte != INS_GET_COMMAND_NONCE) && 
 			(!commandNonceIsValid || (receivedCommandNonce != commandNonce))) {
+			commandNonceIsValid = false;
 			ISOException.throwIt(ISO7816.SW_WRONG_DATA);
 		}
+		commandNonceIsValid = false;
 		
 		// 2. Byte-Array entschlüsseln -> <Command-Nonce><Response-Nonce><Command-APDU>
 		// 3. Command-Nonce mit gespeichertem Command-Nonce vergleichen
@@ -525,7 +526,7 @@ public class EOSApplet extends Applet {
 	// check sent command nonce
 	
 	private void checkCommandNonce(APDU apdu) {
-		byte[] buffer = originalAPDU;
+		byte[] buffer = apdu.getBuffer();
 		
 	}
 	
