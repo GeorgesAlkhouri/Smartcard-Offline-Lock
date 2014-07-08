@@ -166,8 +166,8 @@ public class EOSApplet extends Applet {
 
 	// get command nonce for sending with next apdu
 	
-	// Command-APDU: C0 01 00 00 01
-	// Example: C001000001
+	// Command-APDU: C0 01 00 00 02
+	// Example: C001000002
 
 	// Response-APDUs: 
 	// No error: <2 bytes command nonce> <2 bytes SW_NO_ERROR>   Example: 58A09000
