@@ -4,13 +4,25 @@ import javacard.framework.APDU;
 import javacard.framework.Applet;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
+import javacard.framework.JCSystem;
 import javacard.framework.Util;
+import javacard.security.DESKey;
+import javacard.security.KeyBuilder;
 import javacard.security.RandomData;
+import javacardx.crypto.Cipher;
 
 public class EOSApplet extends Applet {
 	
+	// Wrapper APDU
+	private final static byte OFFSET_ENC_COM_DATA = 1;
+	private final static byte OFFSET_COM_COMMAND_NONCE = 0;
+	private final static byte OFFSET_COM_RESPONSE_NONCE = 2;
+	private final static byte OFFSET_COM_APDU_DATA = 4;
+	private final static byte OFFSET_RES_RESPONSE_NONCE = 0;
+	private final static byte OFFSET_RES_APDU_DATA = 2;
+	
 	// CLA byte in the command APDU header
-	private final static byte CORE_CLA = (byte) 0xC0;
+	private final static byte CLA_BYTE = (byte) 0xC0;
 	
 	// INS bytes in the command APDU header
 	private final static byte INS_GET_COMMAND_NONCE = (byte)0x01;
@@ -50,22 +62,37 @@ public class EOSApplet extends Applet {
     };
 
     // for nonce handling
-    private static final byte NONCE_LENGTH = (byte)0x02;
+    private static final byte NONCE_BYTE_SIZE = (byte)0x02;
     private boolean commandNonceIsValid = false;
     private short commandNonce;
     private RandomData randomData;
     private short responseNonce = 0x0000;
     
-    //private byte[] originalAPDU;
+    private byte[] cipherTemp;
+    private static final short BLOCK_SIZE = 0x0040;
 	
+    
+    // for enryption and decryption handling
+    // phrase: sosecure
+    private byte[] phrase = new byte[] { 
+    	(byte)0x73, (byte)0x6f, (byte)0x73, (byte)0x65, (byte)0x63, (byte)0x75, (byte)0x72, (byte)0x65
+    };
+    private DESKey key;
+    private Cipher cipher;
+    
 
 	// applet constructor
 	private EOSApplet() {
 		entries = new byte[MAX_BYTE_SIZE];
 		globalAccessItem = (byte)0x00;
 		randomData = RandomData.getInstance(RandomData.ALG_SECURE_RANDOM);
-		//originalAPDU = JCSystem.makeTransientByteArray((short) 200, JCSystem.CLEAR_ON_DESELECT);
-
+		
+		// generating DES Key and cipher
+		key = (DESKey)KeyBuilder.buildKey(KeyBuilder.TYPE_DES, KeyBuilder.LENGTH_DES, false);
+		key.setKey(phrase, (short) 0);
+		cipher = Cipher.getInstance(Cipher.ALG_DES_CBC_NOPAD, false);
+		cipherTemp = JCSystem.makeTransientByteArray(BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
+		
 		register();
 	}
 
@@ -93,16 +120,11 @@ public class EOSApplet extends Applet {
 			return;
 		}
 		
-		byte[] buffer = apdu.getBuffer();
-		
-		// truncate first byte
-		// TODO length ?
-		Util.arrayCopyNonAtomic(buffer, (short) 1, buffer, (short) 0, (short) 200);
-		
 		decryptCommandAPDU(apdu);
 		
+		byte[] buffer = apdu.getBuffer();
 		// verify that the applet can accept this APDU message
-		if (buffer[ISO7816.OFFSET_CLA] != CORE_CLA) {
+		if (buffer[ISO7816.OFFSET_CLA] != CLA_BYTE) {
 			ISOException.throwIt(ISO7816.SW_CLA_NOT_SUPPORTED);
 		}
 		
@@ -153,11 +175,11 @@ public class EOSApplet extends Applet {
 
 	private short getCommandNonce(APDU apdu) {
 		byte[] buffer = apdu.getBuffer();
-		randomData.generateData(buffer, (short) 0, NONCE_LENGTH);
+		randomData.generateData(buffer, (short) 0, NONCE_BYTE_SIZE);
 		commandNonce = Util.makeShort(buffer[0], buffer[1]);
 		commandNonceIsValid = true;
-		return (short) NONCE_LENGTH;
-		//apdu.setOutgoingAndSend((short) 0, (short) NONCE_LENGTH);
+		return (short) NONCE_BYTE_SIZE;
+		//apdu.setOutgoingAndSend((short) 0, (short) NONCE_BYTE_SIZE);
 	}
 
 	
@@ -500,17 +522,28 @@ public class EOSApplet extends Applet {
 	
 	private void decryptCommandAPDU(APDU apdu) {
 		byte[] buffer = apdu.getBuffer();
+		
+		// buffer: <wrapper cla byte><enrypt(<Command-Nonce><Response-Nonce><Command-APDU>)>
 
+		// omitting wrapper cla byte while copying to cipherTemp
+		Util.arrayCopyNonAtomic(buffer, OFFSET_ENC_COM_DATA, cipherTemp, (short) 0, BLOCK_SIZE);
+		
+		// decrypt
+		cipher.init(key, Cipher.MODE_DECRYPT);
+		cipher.doFinal(cipherTemp, (short) 0, BLOCK_SIZE, buffer, (short) 0);
+		// clear cipherTemp
+		Util.arrayFillNonAtomic(cipherTemp, (short) 0, BLOCK_SIZE, (byte) 0);
+
+		// buffer: <Command-Nonce><Response-Nonce><Command-APDU>		
+		
 		// command nonce
-		short receivedCommandNonce = Util.makeShort(buffer[0], buffer[1]);
+		short receivedCommandNonce = Util.getShort(buffer, OFFSET_COM_COMMAND_NONCE);
 		// response nonce
-		responseNonce = Util.makeShort(buffer[2], buffer[3]);
+		responseNonce = Util.getShort(buffer, OFFSET_COM_RESPONSE_NONCE);
 		
-		// truncate nonces
-		// TODO length ?
-		Util.arrayCopyNonAtomic(buffer, (short) 4, buffer, (short) 0, (short) 200);
+		// tuncate nonces
+		Util.arrayCopyNonAtomic(buffer, OFFSET_COM_APDU_DATA, buffer, (short) 0, (short) (BLOCK_SIZE - OFFSET_COM_APDU_DATA));
 
-		
 		byte insByte = buffer[ISO7816.OFFSET_INS];
 		// no valid nonce is required when getting one
 		if ((insByte != INS_GET_COMMAND_NONCE) && 
@@ -519,12 +552,6 @@ public class EOSApplet extends Applet {
 			ISOException.throwIt(ISO7816.SW_WRONG_DATA);
 		}
 		commandNonceIsValid = false;
-		
-		// 2. Byte-Array entschlüsseln -> <Command-Nonce><Response-Nonce><Command-APDU>
-		// 3. Command-Nonce mit gespeichertem Command-Nonce vergleichen
-		// 4. Gespeichertes Command-Nonce zurücksetzen
-		// 4a. Wenn gleich, dann Command-APDU auswerten
-		// 4b. Sonst Fehler
 	}
 	
 	
@@ -533,16 +560,25 @@ public class EOSApplet extends Applet {
 	private void encryptResponseAPDUAndSend(APDU apdu, short outgoingLength) {
 		byte[] buffer = apdu.getBuffer();
 		
-		// truncate nonces
-		// TODO length ?
-		Util.arrayCopyNonAtomic(buffer, (short) 0, buffer, (short) 2, (short) 200);
+		// buffer: <Response-APDU>
+		
+		// adding response nonce and length at the top
+		Util.arrayCopyNonAtomic(buffer, (short) 0, buffer, OFFSET_RES_APDU_DATA, (short) outgoingLength);
 		Util.setShort(buffer, (short) 0, (short) responseNonce);
 		
-		// adding 2 bytes for response nonce
-		apdu.setOutgoingAndSend((short) 0, (short) (outgoingLength + 2));
+		// buffer: <Response-Nonce><Response-APDU>
+
+		// encrypt
+		short bufferLength = (short) (OFFSET_RES_APDU_DATA + outgoingLength);
+		Util.arrayCopyNonAtomic(buffer, (short) 0, cipherTemp, (short) 0, bufferLength);
+		cipher.init(key, Cipher.MODE_ENCRYPT);
+		short cipOutLength = cipher.doFinal(cipherTemp, (short) 0, BLOCK_SIZE, buffer, (short) 0);
+		// clear cipherTemp
+		Util.arrayFillNonAtomic(cipherTemp, (short) 0, BLOCK_SIZE, (byte) 0);
+
+		// buffer: <enrypt(<Response-Nonce><Response-APDU>)>
 		
-		// 5. Wenn ausgewertet, dann <Response-Nonce><Response-APDU> verschlüsseln
-		// 6. Senden von verschlüsseltem Byte Array
+		apdu.setOutgoingAndSend((short) 0, (short) cipOutLength);
 	}
     
 
