@@ -1,11 +1,36 @@
 
 
-# Dokumentation
+# Hinweise
 
 - Protokoll + dessen Abbildung auf APDUs
 - Datenstrukturen erklären (definieren + …) (evtl. mit Invarianten) sowohl OnCard als auch OffCard
 - Exposeüberarbeitung mit aufnehmen
 - AES und kein no pad (DES, PKC verwenden)
+
+# Hilfreiche Links
+
+- http://www.javaworld.com/article/2076617/embedded-java/understanding-java-card-2-0.html?page=2
+- http://www.binaryhexconverter.com/hex-to-binary-converter
+- http://www.xorbin.com/tools/sha256-hash-calculator
+- http://www.win.tue.nl/pinpasjc/docs/apis/jc222/javacard/framework/APDU.html
+- http://www.ruimtools.com/doc.php?doc=jc_best
+- http://des.online-domain-tools.com/?do=form-submit
+
+
+
+
+
+
+
+
+
+
+
+# Dokumentation
+
+## Grundlegende Beschreibung
+
+// TODO Inhalte aus Expose übernehmen und wo nötig überarbeiten
 
 
 ## Schlüsselvergabe
@@ -16,14 +41,30 @@
 - Zur Vereinfachung wird bei Smartcard hier key als Konstante deklariert (eigentlich bei Produktion in ROM geschrieben)
 
 
+## Key-Phrase
+
+Klartext: sosecure
+Hex: 73 6f 73 65 63 75 72 65 (736f736563757265)
+
+
+## Admin-Identity
+
+Klartext: meister1
+Hex: 6d 65 69 73 74 65 72 31 (6d65697374657231)
+
+
 ## Komplettverschlüsselung von Command- und Response-APDU
+
+- Verschlüsselung zum Schutz vor APDU-Sniffing
+- Angriffszenarien: vgl. https://www.blackhat.com/presentations/bh-usa-08/Buetler/BH_US_08_Buetler_SmartCard_APDU_Analysis_V1_0_2.pdf
+- Nonce-Generierung zum Schutz vor Replay-Angriffen, da für jede Anfrage ein neues Nonce (eine Zufallszahl) generiert werden muss (fortwährende Änderung der übertragenen Nachrichten)
 
 - Identitäten sind 8 Zeichen lang (bestehend aus a-z und 0-9) und werden so in Wrapper reingereicht
 - Command-Nonce und Response-Nonce sind je 2 Bytes groß und zufällig generierte Werte
 
 - Off-Card:
-1. Command-Nonce von Smartcard generieren lassen und abfragen (Smartcard merkt sich generiertes Command-Nonce)
-2. Generieren von Response-Nonce
+1. Generieren von Response-Nonce
+2. Command-Nonce von Smartcard generieren lassen und abfragen (Smartcard merkt sich generiertes Command-Nonce) (bei Anfrage Responce-Nonce bereits mit übertragen)
 3. <Command-Nonce><Response-Nonce><Command-APDU> verschlüsseln
 4. Senden von verschlüsseltem Byte-Array
 
@@ -34,7 +75,7 @@
 4. Gespeichertes Command-Nonce zurücksetzen
 4a. Wenn gleich, dann Command-APDU auswerten
 4b. Sonst Fehler
-5. Wenn ausgewertet, dann <Response-Nonce><Response-APDU> verschlüsseln
+5. Wenn Command-APDU ausgewertet, dann <Response-Nonce><Response-APDU> verschlüsseln
 6. Senden von verschlüsseltem Byte Array
 
 - Off-Card:
@@ -60,32 +101,166 @@
 
 ## Command-APDUs mit Response-APDUs
 
-- …
+Weekday Bitmask: <Monday> <Tuesday> <Wednesday> <Thursday> <Friday> <Saturday> <Sunday> <ignored>
+Example: 11111000(2) -> f8(16)
+Current Weekday: number of weekday between 01 (Monday) .. 07 (Sunday)
 
 
-## Key-Phrase
+### Command-Nonce generieren
 
-sosecure
-73 6f 73 65 63 75 72 65
-736f736563757265
+INS_GET_COMMAND_NONCE (01)
+- Command-Nonce generieren lassen, dass mit der nächsten Command-APDU übermittelt wird
 
+Command-APDU: C0 01 00 00 01
+Example: C001000001
 
-## Admin-Identity
-
-meister1
-6d 65 69 73 74 65 72 31
-6d65697374657231
+Response-APDUs: 
+No error: <2 bytes command nonce> <2 bytes SW_NO_ERROR>   Example: 58A09000
 
 
+### Zugang basierend auf Identitäten
 
-## Hilfreiche Links
+INS_SHOULD_OPEN (10)
+- Abfragen, ob Identität an einem spezifischen (meist dem aktuellen) Wochentag Zugang hat
+- keine Admin-Identität notwendig
 
-- http://www.javaworld.com/article/2076617/embedded-java/understanding-java-card-2-0.html?page=2
-- http://www.binaryhexconverter.com/hex-to-binary-converter
-- http://www.xorbin.com/tools/sha256-hash-calculator
-- http://www.win.tue.nl/pinpasjc/docs/apis/jc222/javacard/framework/APDU.html
-- http://www.ruimtools.com/doc.php?doc=jc_best
-- http://des.online-domain-tools.com/?do=form-submit
+Command-APDU: C0 10 <1 byte current weekday> 00 08 <8 bytes identity token> 01
+Example: C010060008abcd1234abcd567801
+
+Response-APDUs: 
+No error: <1 byte (01 ... true, 00 ... false)> <2 bytes SW_NO_ERROR>   Example: 019000
+Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
+Invalid current weekday: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+
+
+INS_GET_WEEKDAYS (50)
+- Weekday-Bitmask für eine Identität abfragen
+- Admin-Identität erforderlich
+
+Command-APDU: C0 50 00 00 10 <8 bytes admin token> <8 bytes identity token> 01
+Example: C0500000106d65697374657231abcd1234abcd567801
+
+Response-APDUs:
+No error: <1 byte weekday bitmask> <2 bytes SW_NO_ERROR>   Example: 069000
+Not found: <2 bytes SW_RECORD_NOT_FOUND>   Bytes: 6a83
+Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
+No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+
+
+INS_GET_ACCESS_ITEM_AT_POS (51)
+- AccessItem an einer Position in entries abfragen
+- notwendig, da APDU nicht alle Einträge mit einer Response senden kann (maximale Größe wird sonst erreicht)
+- wird in Verbindung mit INS_GET_MAX_SIZE verwendet
+- Admin-Identität erforderlich
+
+Command-APDU: C0 51 <2 bytes position (start 0)> 08 <8 bytes admin token> 09
+Example: C0510003086d6569737465723109
+
+Response-APDUs:
+No error: <8 bytes identity token> <1 byte weekday bitmask> <2 bytes SW_NO_ERROR>   Example: abcd1234abcd5678049000
+Not found or empty: <2 bytes SW_RECORD_NOT_FOUND>   Bytes: 6a83
+Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
+No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+
+
+INS_GET_MAX_SIZE (60)
+- maximal mögliche Anzahl an Einträgen abfragen
+- wird in Verbindung mit INS_GET_ACCESS_ITEM_AT_POS verwendet
+- Admin-Identität erforderlich
+
+// Command-APDU: C0 60 00 00 08 <8 bytes admin token> 02
+// Example: C0600000086d6569737465723102
+
+// Response-APDUs:
+// No error: <2 bytes max size count> <2 bytes SW_NO_ERROR>   Example: 00049000
+// Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
+// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+
+INS_PUT_ACCESS_ITEM (30)
+- ein AccessItem erzeugen oder updaten
+- Admin-Identität erforderlich
+
+Command-APDU: C0 30 00 00 11 <8 bytes admin token> <8 bytes identity token> <1 byte weekday bitmask>
+Example: C0300000116d65697374657231abcd1234abcd567806
+
+Response-APDUs:
+No error: <2 bytes SW_NO_ERROR>   Bytes: 9000
+If full: <2 bytes SW_UNKNOWN>   Bytes: 6f00
+Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
+No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+
+
+INS_REMOVE_ACCESS_ITEM (40)
+- ein AccessItem einer Identität entfernen
+- Admin-Identität erforderlich
+
+Command-APDU: C0 40 00 00 10 <8 bytes admin token> <8 bytes identity token>
+Example: C0400000106d65697374657231abcd1234abcd5678
+
+Response-APDUs:
+No error: <2 bytes SW_NO_ERROR>   Bytes: 9000
+Not found: <2 bytes SW_RECORD_NOT_FOUND>   Bytes: 6a83
+Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
+No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+
+
+INS_REMOVE_ALL_ACCESS_ITEMS (41)
+- alle AccessItems entfernen
+- Admin-Identität erforderlich
+
+Command-APDU: C0 41 00 00 08 <8 bytes admin token>
+Example: C0410000086d65697374657231
+
+Response-APDUs:
+No error: <2 bytes SW_NO_ERROR>   Bytes: 9000
+Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
+No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+
+
+### Globaler Zugang (unabhängig von Identitäten)
+
+INS_SHOULD_OPEN_GLOBAL (20)
+- Abfragen, ob jede Identität an einem spezifischen (meist dem aktuellen) Wochentag Zugang hat
+- keine Admin-Identität notwendig
+
+Command-APDU: C0 20 <1 byte current weekday> 00
+Example: C0200600
+
+Response-APDUs: 
+No error: <1 byte (01 ... true, 00 ... false)> <2 bytes SW_NO_ERROR>   Example: 019000
+Invalid current weekday: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+
+
+INS_GET_GLOBAL_ACCESS (22)
+- globale Weekday-Bitmask abfragen
+- Admin-Identität erforderlich
+
+Command-APDU: C0 22 00 00 08 <8 bytes admin token> 01
+Example: C0220000086d6569737465723101
+
+Response-APDUs:
+No error: <1 byte weekday bitmask> <2 bytes SW_NO_ERROR>   Bytes: 9000
+Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
+No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+
+
+INS_SET_GLOBAL_ACCESS (21)
+- globale Weekday-Bitmask setzen
+- Admin-Identität erforderlich
+
+Weekday Bitmask: <Monday> <Tuesday> <Wednesday> <Thursday> <Friday> <Saturday> <Sunday> <ignored>
+Example: 11111000(2) -> f8(16)
+
+Command-APDU: C0 21 <1 byte weekday bitmask> 00 08 <8 bytes admin token>
+Example: C021f800086d65697374657231
+
+Response-APDUs:
+No error: <2 bytes SW_NO_ERROR>   Bytes: 9000
+Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
+No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
+
+
+
 
 
 
@@ -213,5 +388,110 @@ Response-Nonce prüfen (0. und 1. Byte): Entspicht 4444 wie beim Senden
 Boolean-Byte extrahieren (2. Byte): 01 (True)
 
 -> Identität hat nach Setzen der Erlaubnis Zugang
+
+
+
+
+
+
+
+## On-Card
+
+### Datenstrukturen
+
+#### Dictionary
+- Dictionary auf Basis eines Byte-Arrays (entries)
+- Aufbau: <Key 1><Value 1><leerer Key><leerer Value><Key 3><Value 3>
+- Maximale Anzahl an Einträgen über Konstante MAX_SIZE festlegbar
+- Größe von Key bzw. Value über Konstanten festlegbar: KEY_BYTE_SIZE, VALUE_BYTE_SIZE
+- lineare Suche nach Key
+- Löschen eines Eintrags durch Überschreiben mit Nullen
+- keine nicht-atomaren Operationen beim Schreiben in dieses Byte-Array (sonst Integrität der Daten gefährdet)
+
+#### Temporäres Byte-Array
+- cipherTemp als transientes Array (im RAM)
+- für schnellen Zugriff beim Ver- und Entschlüsseln (APDU-Buffer wird vor Ver- oder Entschlüsselung in cipherTemp kopiert)
+- zusätzlich nicht-atomar kopiert, da Integrität dieser temporären Daten nicht gefährdet
+
+#### Globales AccessItem
+- globalAccessItem für Bestimmung von Öffnungszeiten unabhängig von einer Identität
+
+#### Konstanten
+- phrase: der Schlüssel, um den DESKey zu erzeugen
+- BLOCK_SIZE: jedes empfangene und gesendete Byte-Array besitzt diese Byte-Länge
+- EMPTY_ENTRY: als Mustervergleich und zum Überschreiben von Einträgen
+
+### API / Methoden
+
+#### APDU-Handling
+
+private short getCommandNonce(APDU apdu)
+- übernimmt das Handling für die APDU mit INS_GET_COMMAND_NONCE
+
+private short shouldOpen(APDU apdu)
+- übernimmt das Handling für die APDU mit INS_SHOULD_OPEN
+
+private short shouldOpenGlobal(APDU apdu)
+- übernimmt das Handling für die APDU mit INS_SHOULD_OPEN_GLOBAL
+
+private short getGlobalAccessItem(APDU apdu)
+- übernimmt das Handling für die APDU mit INS_GET_GLOBAL_ACCESS
+
+private void setGlobalAccessItem(APDU apdu)
+- übernimmt das Handling für die APDU mit INS_SET_GLOBAL_ACCESS
+
+private void putAccessItem(APDU apdu)
+- übernimmt das Handling für die APDU mit INS_PUT_ACCESS_ITEM
+
+private void removeAccessItem(APDU apdu)
+- übernimmt das Handling für die APDU mit INS_REMOVE_ACCESS_ITEM
+
+private void removeAllAccessItems(APDU apdu)
+- übernimmt das Handling für die APDU mit INS_REMOVE_ALL_ACCESS_ITEMS
+
+private short getWeekdays(APDU apdu)
+- übernimmt das Handling für die APDU mit INS_GET_WEEKDAYS
+
+private short getAccessItemAtPos(APDU apdu)
+- übernimmt das Handling für die APDU mit INS_GET_ACCESS_ITEM_AT_POS
+
+private short getMaxSize(APDU apdu)
+- übernimmt das Handling für die APDU mit INS_GET_MAX_SIZE
+
+#### Ver-/Entschlüsselung
+
+private void decryptCommandAPDU(APDU apdu)
+- entschlüsselt das übertragene Byte-Array und prüft das übertragene Command-Nonce
+
+private void encryptResponseAPDUAndSend(APDU apdu, short outgoingLength)
+- verschlüsselt die generierte APDU mit Command-Nonce und Response-Nonce und sendet die Response
+
+#### Hilfsmethoden
+
+private boolean isAdminIdentity(byte[] idArr, short idOff)
+- überprüft, ob die gesendete Admin-Identiät gültig ist
+- wird mit der intern nativ arbeitenden Methode arrayCompare umgesetzt
+
+public short findPosition(
+    	byte[] patArr, short patOff, short patLen, 
+    	short entryLen, 
+    	byte[] srcArr, short srcOff, short srcLen)
+- Methode zum Suchen eines Mustern in einem Byte-Array
+- wird für das Auffinden des Keys und von leeren Einträgen verwendet
+- wenn nichts gefunden wird, ist entspricht der Rückgabewert position == (srcOff + srcLen)
+
+
+
+
+## Off-Card
+
+### Datenstrukturen
+
+// TODO
+
+
+### API / Methoden
+
+
 
 

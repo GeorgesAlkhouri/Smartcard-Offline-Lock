@@ -73,7 +73,7 @@ public class EOSApplet extends Applet {
     private static final short BLOCK_SIZE = 0x0040;
 	
     // phrase: sosecure
-    private byte[] phrase = new byte[] { 
+    private byte[] PHRASE = new byte[] { 
     	(byte)0x73, (byte)0x6f, (byte)0x73, (byte)0x65, (byte)0x63, (byte)0x75, (byte)0x72, (byte)0x65
     };
     private DESKey key;
@@ -88,7 +88,7 @@ public class EOSApplet extends Applet {
 		
 		// generating DES Key and cipher
 		key = (DESKey)KeyBuilder.buildKey(KeyBuilder.TYPE_DES, KeyBuilder.LENGTH_DES, false);
-		key.setKey(phrase, (short) 0);
+		key.setKey(PHRASE, (short) 0);
 		cipher = Cipher.getInstance(Cipher.ALG_DES_CBC_NOPAD, false);
 		cipherTemp = JCSystem.makeTransientByteArray(BLOCK_SIZE, JCSystem.CLEAR_ON_DESELECT);
 		
@@ -135,8 +135,8 @@ public class EOSApplet extends Applet {
 		case INS_REMOVE_ACCESS_ITEM: removeAccessItem(apdu); break;
 		case INS_GET_WEEKDAYS: outgoingLength = getWeekdays(apdu); break;
 		case INS_SHOULD_OPEN_GLOBAL: outgoingLength = shouldOpenGlobal(apdu); break;
-		case INS_GET_GLOBAL_ACCESS: outgoingLength = getGlobalAccessItem(apdu); break;
-		case INS_SET_GLOBAL_ACCESS: setGlobalAccessItem(apdu); break;
+		case INS_GET_GLOBAL_ACCESS: outgoingLength = getGlobalAccess(apdu); break;
+		case INS_SET_GLOBAL_ACCESS: setGlobalAccess(apdu); break;
 		case INS_REMOVE_ALL_ACCESS_ITEMS: removeAllAccessItems(apdu); break;
 		case INS_GET_ACCESS_ITEM_AT_POS: outgoingLength = getAccessItemAtPos(apdu); break;
 		case INS_GET_MAX_SIZE: outgoingLength = getMaxSize(apdu); break;
@@ -190,7 +190,7 @@ public class EOSApplet extends Applet {
 	// Current Weekday: number of weekday between 01 (Monday) .. 07 (Sunday)
 	
 	// Command-APDU: C0 10 <1 byte current weekday> 00 08 <8 bytes identity token> 01
-	// Example: C010060008abcdefgh01
+	// Example: C010060008abcd1234abcd567801
 	
 	// Response-APDUs: 
 	// No error: <1 byte (01 ... true, 00 ... false)> <2 bytes SW_NO_ERROR>   Example: 019000
@@ -261,7 +261,7 @@ public class EOSApplet extends Applet {
 	}
 	
 	
-	// get global access item
+	// get global access
 	// admin identitiy required
 
 	// Weekday Bitmask: <Monday> <Tuesday> <Wednesday> <Thursday> <Friday> <Saturday> <Sunday> <ignored>
@@ -275,7 +275,7 @@ public class EOSApplet extends Applet {
 	// Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
 	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
 
-	private short getGlobalAccessItem(APDU apdu) {
+	private short getGlobalAccess(APDU apdu) {
 		byte[] buffer = apdu.getBuffer();
 		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
 		if (lc != ADMIN_IDENTITY.length) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
@@ -288,7 +288,7 @@ public class EOSApplet extends Applet {
 	}
 	
 
-	// set global access item
+	// set global access
 	// admin identitiy required
 
 	// Weekday Bitmask: <Monday> <Tuesday> <Wednesday> <Thursday> <Friday> <Saturday> <Sunday> <ignored>
@@ -302,7 +302,7 @@ public class EOSApplet extends Applet {
 	// Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
 	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
 
-	private void setGlobalAccessItem(APDU apdu) {
+	private void setGlobalAccess(APDU apdu) {
 		byte[] buffer = apdu.getBuffer();
 		short lc = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
 		if (lc != ADMIN_IDENTITY.length) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
@@ -320,7 +320,7 @@ public class EOSApplet extends Applet {
 	// Example: 11111000(2) -> f8(16)
 	
 	// Command-APDU: C0 30 00 00 11 <8 bytes admin token> <8 bytes identity token> <1 byte weekday bitmask>
-	// Example: C0300000116d65697374657231abcdefgh06
+	// Example: C0300000116d65697374657231abcd1234abcd567806
 	
 	// Response-APDUs:
 	// No error: <2 bytes SW_NO_ERROR>   Bytes: 9000
@@ -361,7 +361,7 @@ public class EOSApplet extends Applet {
 	// admin identitiy required
 	
 	// Command-APDU: C0 40 00 00 10 <8 bytes admin token> <8 bytes identity token>
-	// Example: C0400000106d65697374657231abcdefgh
+	// Example: C0400000106d65697374657231abcd1234abcd5678
 	
 	// Response-APDUs:
 	// No error: <2 bytes SW_NO_ERROR>   Bytes: 9000
@@ -423,7 +423,7 @@ public class EOSApplet extends Applet {
 	// Example: 11111000(2) -> f8(16)
 
 	// Command-APDU: C0 50 00 00 10 <8 bytes admin token> <8 bytes identity token> 01
-	// Example: C0500000106d65697374657231abcdefgh01
+	// Example: C0500000106d65697374657231abcd1234abcd567801
 	
 	// Response-APDUs:
 	// No error: <1 byte weekday bitmask> <2 bytes SW_NO_ERROR>   Example: 069000
@@ -464,7 +464,7 @@ public class EOSApplet extends Applet {
 	// Example: C0510003086d6569737465723109
 	
 	// Response-APDUs:
-	// No error: <8 bytes identity token> <1 byte weekday bitmask> <2 bytes SW_NO_ERROR>   Example: abcdefgh049000
+	// No error: <8 bytes identity token> <1 byte weekday bitmask> <2 bytes SW_NO_ERROR>   Example: abcd1234abcd5678049000
 	// Not found or empty: <2 bytes SW_RECORD_NOT_FOUND>   Bytes: 6a83
 	// Wrong data length: <2 bytes SW_WRONG_LENGTH>   Bytes: 6700
 	// No admin: <2 bytes SW_WRONG_DATA>   Bytes: 6a80
