@@ -20,9 +20,6 @@ public class TestLock implements IEnvironment {
 			SmartCard.start();
 			CardRequest request = new CardRequest(CardRequest.ANYCARD,null,GeneralWrapper.class);
 			this.smartCard = SmartCard.waitForCard(request);
-			if (this.smartCard != null) {
-				System.out.println("yes");
-			}
 		} catch (OpenCardPropertyLoadingException e) {
 			// TODO Automatisch erstellter Catch-Block
 			e.printStackTrace();
