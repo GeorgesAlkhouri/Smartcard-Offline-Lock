@@ -1,4 +1,5 @@
 
+
 # Dokumentation
 
 - Protokoll + dessen Abbildung auf APDUs
@@ -51,12 +52,39 @@
 - Response-APDU: <encrypted byte-array>
 
 
-## Enrypted Byte-Array (immer 64 Byte lang):
+## Encrypted Byte-Array (immer 64 Byte lang):
 
 - Command: <Command-Nonce><Response-Nonce><Command-APDU>
 - Response: <Response-Nonce><Response-APDU>
 
 
-# Command-APDUs mit Response-APDUs
+## Command-APDUs mit Response-APDUs
 
 - …
+
+
+## Key-Phrase
+
+sosecure
+73 6f 73 65 63 75 72 65
+736f736563757265
+
+
+## AdminIdentity
+
+meister1
+6d 65 69 73 74 65 72 31
+6d65697374657231
+
+
+## Hilfreiche Links
+
+- http://www.javaworld.com/article/2076617/embedded-java/understanding-java-card-2-0.html?page=2
+- http://www.binaryhexconverter.com/hex-to-binary-converter
+- http://www.xorbin.com/tools/sha256-hash-calculator
+- http://www.win.tue.nl/pinpasjc/docs/apis/jc222/javacard/framework/APDU.html
+- http://www.ruimtools.com/doc.php?doc=jc_best
+- http://des.online-domain-tools.com/?do=form-submit
+
+
+

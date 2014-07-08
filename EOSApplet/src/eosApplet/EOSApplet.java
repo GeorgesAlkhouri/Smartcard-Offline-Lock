@@ -68,11 +68,10 @@ public class EOSApplet extends Applet {
     private RandomData randomData;
     private short responseNonce = 0x0000;
     
+    // for enryption and decryption handling
     private byte[] cipherTemp;
     private static final short BLOCK_SIZE = 0x0040;
 	
-    
-    // for enryption and decryption handling
     // phrase: sosecure
     private byte[] phrase = new byte[] { 
     	(byte)0x73, (byte)0x6f, (byte)0x73, (byte)0x65, (byte)0x63, (byte)0x75, (byte)0x72, (byte)0x65
@@ -564,7 +563,7 @@ public class EOSApplet extends Applet {
 		
 		// adding response nonce and length at the top
 		Util.arrayCopyNonAtomic(buffer, (short) 0, buffer, OFFSET_RES_APDU_DATA, (short) outgoingLength);
-		Util.setShort(buffer, (short) 0, (short) responseNonce);
+		Util.setShort(buffer, (short) OFFSET_RES_RESPONSE_NONCE, (short) responseNonce);
 		
 		// buffer: <Response-Nonce><Response-APDU>
 
