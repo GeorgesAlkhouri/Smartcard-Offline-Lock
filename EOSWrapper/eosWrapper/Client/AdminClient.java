@@ -1,9 +1,15 @@
 package eosWrapper.Client;
 
-import opencard.core.service.CardServiceException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 import eosWrapper.GeneralWrapper;
+import eosWrapper.AccessItem.AccessItem;
 import eosWrapper.Environment.IEnvironment;
+import eosWrapper.Identity.GuestIdentity;
 import eosWrapper.Identity.IIdentity;
+import eosWrapper.Util.WeekDay;
 
 public class AdminClient implements IClient {
 
@@ -16,15 +22,16 @@ public class AdminClient implements IClient {
 		try {
 			GeneralWrapper service = (GeneralWrapper)env.getSmartCard().getCardService(GeneralWrapper.class,true);
 			service.selectApplet();
-			service.shouldOpen(this.id,env.getWeekDay());
-		} catch (CardServiceException e) {
-			// TODO Automatisch erstellter Catch-Block
-			e.printStackTrace();
-		} catch (ClassNotFoundException e) {
-			// TODO Automatisch erstellter Catch-Block
-			e.printStackTrace();
+			service.createAccessItem(
+					this.id, new AccessItem(
+							new GuestIdentity("12345678"), 
+							Arrays.asList(
+									new WeekDay[]{WeekDay.FRIDAY,WeekDay.WEDNESDAY}
+					)));
+			service.getAllAccessItems(this.id);
+			
+			
 		} catch (Exception e) {
-			// TODO Automatisch erstellter Catch-Block
 			e.printStackTrace();
 		}
 	}
