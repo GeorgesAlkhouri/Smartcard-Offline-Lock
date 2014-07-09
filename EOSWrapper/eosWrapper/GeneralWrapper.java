@@ -1,6 +1,7 @@
 package eosWrapper;
 
 import java.nio.charset.Charset;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -11,6 +12,7 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 
@@ -27,16 +29,31 @@ import eosWrapper.Util.WeekDay;
 
 public class GeneralWrapper extends CardService {
 
+	protected final static byte[] SELECT = {
+		(byte)0x00,(byte)0xA4,(byte)0x04,(byte)0x00,(byte)0x09,(byte)0x45,(byte)0x4F,(byte)0x53,(byte)0x41,(byte)0x70,(byte)0x70,(byte)0x6C,(byte)0x65,(byte)0x74,(byte)0x00
+	};
 	protected final static byte[] CORE_CLA = {(byte)0xC0};
 	
 	protected final static byte[] INS_GET_COMMAND_NONCE = {(byte)0x01};
-	
 	protected final static byte[] INS_SHOULD_OPEN = {(byte)0x10};
 	protected final static byte[] INS_SHOULD_OPEN_GLOBAL = {(byte)0x20};
 
 	protected final static byte[] INIT_NONCE = {(byte)0x00, (byte)0x00};
 	
+	protected final static byte[] PHRASE = new byte[] { 
+    	(byte)0x73, (byte)0x6f, (byte)0x73, (byte)0x65, (byte)0x63, (byte)0x75, (byte)0x72, (byte)0x65
+    };
+	protected final static byte[] IV = new byte[] {
+		(byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00,(byte)0x00,(byte)0x00,(byte)0x00
+	};
+	
 	private byte[] validateNonce;
+
+	public void selectApplet() throws Exception {
+		CommandAPDU select = new CommandAPDU(SELECT);
+		ResponseAPDU response = sendCommandAPDU(select);
+		System.out.println("");
+	}
 	
 	public boolean shouldOpen(IAccessItem item, WeekDay day) throws Exception {
 		return shouldOpen(item.getIdentity(), day);
@@ -48,7 +65,8 @@ public class GeneralWrapper extends CardService {
 				INS_SHOULD_OPEN,
 				new byte[]{(byte)day.convertWeekDay()},
 				new byte[]{0x00,0x08},
-				id.getToken().getBytes(Charset.forName("US-ASCII")));
+				id.getToken().getBytes(Charset.forName("US-ASCII")),
+				new byte[]{0x01});
 		byte[] commandNonce = requestNonce();
 		CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
 		ResponseAPDU response = sendCommandAPDU(command);
@@ -112,21 +130,14 @@ public class GeneralWrapper extends CardService {
 	 */
 	private byte[] requestNonce() throws Exception {
 		byte[] apdu = concat(
-				new byte[]{(byte)0x00,(byte)0x00,(byte)0x00,(byte)0x00,(byte)0x00,(byte)0x00,(byte)0x00},
 				CORE_CLA,
 				INS_GET_COMMAND_NONCE,
 				INIT_NONCE,
-				new byte[]{0x01});
+				new byte[]{0x02});
 		CommandAPDU command = createCommandAPDU(INIT_NONCE, createNonce(2), apdu);
 		ResponseAPDU response = sendCommandAPDU(command);
-		//TODO: implement processResponseAPDU
-		byte[] decrypted = decrypt(response.data());
-		byte[] responceNonce = Arrays.copyOfRange(decrypted,0,2);
-		if (validateNonce(responceNonce)) {
-			return Arrays.copyOfRange(decrypted,2,4);
-		} else {
-			throw new Exception("Response nonce wrong.");
-		}
+		byte[] decrypted = processResponseAPDU(response);
+		return decrypted;
 	}
 	
 	/**
@@ -137,11 +148,24 @@ public class GeneralWrapper extends CardService {
 	 * @param responseNonce The nonce for the offcard to verify.
 	 * @param commandAPDU 
 	 * @return Returns a ready to submit CommandAPDU.
+	 * @throws Exception 
 	 */
-	private CommandAPDU createCommandAPDU(byte[] commandNonce, byte[] responseNonce, byte[] commandAPDU) {
+	private CommandAPDU createCommandAPDU(byte[] commandNonce, byte[] responseNonce, byte[] commandAPDU) throws Exception {
 		this.validateNonce = responseNonce;
-		byte[] encrypted = encrypt(concat(commandNonce,responseNonce,commandAPDU));
-		byte[] finale = concat(new byte[]{(byte)encrypted.length},encrypted);
+			
+		int toFill = 64 - (commandNonce.length + responseNonce.length + commandAPDU.length);
+		byte[] debug = concat(commandNonce,responseNonce,commandAPDU,new byte[toFill]);
+		String d = HexString.hexify(debug);
+		
+		byte[] encrypted;
+		if (toFill > 0)
+			encrypted = encrypt(concat(commandNonce,responseNonce,commandAPDU,new byte[toFill]));
+		else
+			encrypted = encrypt(concat(commandNonce,responseNonce,commandAPDU));
+		
+		byte[] finale = concat(new byte[]{(byte)(encrypted.length * 2)},encrypted);
+		
+		String dd = HexString.hexify(finale);
 		return new CommandAPDU(finale);
 	}
 	
@@ -153,19 +177,13 @@ public class GeneralWrapper extends CardService {
 	 * @param command The CommandAPDU encaplsulades the pure APDU.
 	 * @return Returns an unprocessed an properly encrypted APDU or
 	 * null if an error occures.
+	 * @throws CardTerminalException 
+	 * @throws InvalidCardChannelException 
 	 */
-	private ResponseAPDU sendCommandAPDU(CommandAPDU command) {
+	private ResponseAPDU sendCommandAPDU(CommandAPDU command) throws InvalidCardChannelException, CardTerminalException {
 		allocateCardChannel();
-		ResponseAPDU response = null;
-		try {
-			response = getCardChannel().sendCommandAPDU(command);
-		} catch (InvalidCardChannelException e) {
-			e.printStackTrace();
-			return null;
-		} catch (CardTerminalException e) {
-			e.printStackTrace();
-			return null;
-		}
+		ResponseAPDU response = getCardChannel().sendCommandAPDU(command);
+		releaseCardChannel();
 		return response;
 	}
 	
@@ -176,8 +194,9 @@ public class GeneralWrapper extends CardService {
 	 * 
 	 * @param response The received APDU response.
 	 * @return Returns the truncated response APDU.
+	 * @throws Exception 
 	 */
-	private byte[] processResponseAPDU(ResponseAPDU response) {
+	private byte[] processResponseAPDU(ResponseAPDU response) throws Exception {
 		String result = HexString.hexifyShort(response.sw1(),response.sw2());
 		if (!result.equals("9000")) {
 			System.out.println("Response status wrong: " + result);
@@ -187,7 +206,8 @@ public class GeneralWrapper extends CardService {
 			byte[] decrypted = decrypt(response.data());
 			byte[] responceNonce = Arrays.copyOfRange(decrypted,0,2);
 			if (validateNonce(responceNonce)) {
-				return Arrays.copyOfRange(decrypted,3,decrypted.length);
+				byte[] data = Arrays.copyOfRange(decrypted,2,decrypted.length);
+				return rightTrim(data);
 			} else {
 				System.out.println("Wrong response nonce.");
 				return null;
@@ -228,8 +248,9 @@ public class GeneralWrapper extends CardService {
 	 * 
 	 * @param data
 	 * @return
+	 * @throws Exception 
 	 */
-	private byte[] decrypt(byte[] data) {
+	private byte[] decrypt(byte[] data) throws Exception {
 		return cryptography(Cipher.DECRYPT_MODE, data);
 	}
 	
@@ -238,8 +259,9 @@ public class GeneralWrapper extends CardService {
 	 * 
 	 * @param data
 	 * @return
+	 * @throws Exception 
 	 */
-	private byte[] encrypt(byte[] data) {
+	private byte[] encrypt(byte[] data) throws Exception {
 		return cryptography(Cipher.ENCRYPT_MODE, data);
 	}
 	
@@ -249,31 +271,19 @@ public class GeneralWrapper extends CardService {
 	 * @param data
 	 * @return Returns processed data or empty byte array
 	 * if an error occured.
+	 * @throws NoSuchPaddingException 
+	 * @throws NoSuchAlgorithmException 
+	 * @throws InvalidAlgorithmParameterException 
+	 * @throws InvalidKeyException 
+	 * @throws BadPaddingException 
+	 * @throws IllegalBlockSizeException 
 	 */
-	private byte[] cryptography(int opmode, byte[] data) {
-		byte[] crypted = new byte[0];
-		try {
-			Cipher cipher = Cipher.getInstance("DES/CBC/PKCS5Padding");
-			SecretKeySpec key = new SecretKeySpec(null, "AES");
-			cipher.init(opmode, key);
-			crypted = cipher.doFinal(data);
-			
-		} catch (NoSuchAlgorithmException e) {
-			// TODO Automatisch erstellter Catch-Block
-			e.printStackTrace();
-		} catch (NoSuchPaddingException e) {
-			// TODO Automatisch erstellter Catch-Block
-			e.printStackTrace();
-		} catch (InvalidKeyException e) {
-			// TODO Automatisch erstellter Catch-Block
-			e.printStackTrace();
-		} catch (IllegalBlockSizeException e) {
-			// TODO Automatisch erstellter Catch-Block
-			e.printStackTrace();
-		} catch (BadPaddingException e) {
-			// TODO Automatisch erstellter Catch-Block
-			e.printStackTrace();
-		}
+	private byte[] cryptography(int opmode, byte[] data) throws Exception {
+		Cipher cipher = Cipher.getInstance("DES/CBC/NoPadding");
+		SecretKeySpec key = new SecretKeySpec(PHRASE, "DES");
+		IvParameterSpec iv = new IvParameterSpec(IV);
+		cipher.init(opmode, key, iv);
+		byte[] crypted = cipher.doFinal(data);
 		return crypted;
 	}
 	
@@ -297,5 +307,19 @@ public class GeneralWrapper extends CardService {
 	        start += arrItem.length;
 	    }
 	    return retArray;
+	}
+	
+	private byte[] rightTrim(byte[] a) {
+		int count = a.length - 1;
+		while (count > 0) {
+			if (a[count] != 0)
+				break;
+			else
+				count--;
+		}
+		if (count == a.length - 1)
+			return a;
+		else
+			return Arrays.copyOfRange(a,0,count + 1);
 	}
 }

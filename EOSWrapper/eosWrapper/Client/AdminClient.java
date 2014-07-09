@@ -15,6 +15,7 @@ public class AdminClient implements IClient {
 	public void open(IEnvironment env) {
 		try {
 			GeneralWrapper service = (GeneralWrapper)env.getSmartCard().getCardService(GeneralWrapper.class,true);
+			service.selectApplet();
 			service.shouldOpen(this.id,env.getWeekDay());
 		} catch (CardServiceException e) {
 			// TODO Automatisch erstellter Catch-Block
