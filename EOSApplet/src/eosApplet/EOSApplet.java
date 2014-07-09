@@ -139,28 +139,13 @@ public class EOSApplet extends Applet {
 		case INS_SET_GLOBAL_ACCESS: setGlobalAccess(apdu); break;
 		case INS_REMOVE_ALL_ACCESS_ITEMS: removeAllAccessItems(apdu); break;
 		case INS_GET_ACCESS_ITEM_AT_POS: outgoingLength = getAccessItemAtPos(apdu); break;
-		case INS_GET_MAX_SIZE: outgoingLength = getMaxSize(apdu); break;
-		
-		case (byte)0x90: debugGetAll(apdu); break;
-		
+		case INS_GET_MAX_SIZE: outgoingLength = getMaxSize(apdu); break;		
 		default:
 			// good practice: If you don't know the INStruction, say so:
 			ISOException.throwIt(ISO7816.SW_INS_NOT_SUPPORTED);
 		}
 		
 		encryptResponseAPDUAndSend(apdu, outgoingLength);
-	}
-	
-	
-	// TODO only for debugging C090000084
-	private void debugGetAll(APDU apdu) {
-		byte[] buffer = apdu.getBuffer();
-		short le = (short)(buffer[ISO7816.OFFSET_LC] & (short) 0x00FF);
-		if (le != MAX_BYTE_SIZE) ISOException.throwIt(ISO7816.SW_WRONG_LENGTH);
-
-		apdu.setOutgoing();                           // set transmission to outgoing data
-		apdu.setOutgoingLength((short) le);            // set the number of bytes to send to the IFD
-		apdu.sendBytesLong(entries, (short) 0, (short) le);
 	}
 
 
