@@ -14,16 +14,67 @@ public enum WeekDay {
     FRIDAY, 
     SATURDAY;
 
+	/**
+	 * Converts a give date to an enum representation
+	 * of WeekDay.
+	 * 
+	 * @param date
+	 * @return
+	 */
 	public static WeekDay getWeekDay(Date date) {
 		 Calendar calendar = Calendar.getInstance();
 		 calendar.setTime(date);
 		 return WeekDay.values()[calendar.get(Calendar.DAY_OF_WEEK) - 1];
 	 }
 	
+	/**
+	 * See
+	 * 
+	 * public static int shiftWeekDay(WeekDay day)
+	 * 
+	 * @return
+	 */
+	public int shiftWeekDay() {
+		return  shiftWeekDay(this);
+	}
+	
+	/**
+	 * See
+	 * 
+	 * public static int convertWeekDay(WeekDay day)
+	 * 
+	 * @return
+	 */
 	public int convertWeekDay() {
 		return convertWeekDay(this);
 	}
 	
+	/**
+	 * Maps the the order (01) Sunday - (07) Saturday to
+	 * the order (01) Monday - (07) Sunday.
+	 * 
+	 * @param day
+	 * @return
+	 */
+	public static int shiftWeekDay(WeekDay day) {
+		if (day == SUNDAY)
+			return 7;
+		else
+			return day.ordinal();
+	}
+	
+
+	/**
+	 * Converts a week day into his byte representation.
+	 * 
+	 * Example:
+	 * 00000010
+	 * 
+	 * Represents the week day monday.
+	 * 
+	 * @param day
+	 * @return
+	 */
 	public static int convertWeekDay(WeekDay day) {																						
 		if (day == SUNDAY)
 			return (int)Math.pow(2,1);
@@ -31,6 +82,20 @@ public enum WeekDay {
 			return (int)Math.pow(2,values().length - day.ordinal() + 1);
 	}
 	
+
+	/**
+	 * Converts a list of week days to a bitmask representation in
+	 * the order Sunday - Monday.
+	 * 
+	 * Example:
+	 * 10100000
+	 * 
+	 * Represents a list of week days containing Sunday and
+	 * Friday.
+	 * 
+	 * @param days
+	 * @return
+	 */
 	public static int convertWeekDays(List<WeekDay> days) {
 		int bitMask = 0;
 		for (WeekDay day : days) {

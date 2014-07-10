@@ -2,8 +2,6 @@ package eosWrapper.Environment;
 
 import java.util.Date;
 
-import opencard.core.event.CTListener;
-import opencard.core.event.CardTerminalEvent;
 import opencard.core.service.CardRequest;
 import opencard.core.service.CardServiceException;
 import opencard.core.service.SmartCard;
@@ -12,11 +10,14 @@ import opencard.core.util.OpenCardPropertyLoadingException;
 import eosWrapper.GeneralWrapper;
 import eosWrapper.Util.WeekDay;
 
-public class TestLock implements IEnvironment,CTListener {
+public class TestLock implements IEnvironment {
 
 	//Need state here, because SmartCard.waitForCard could return null
 	private SmartCard smartCard;
 	
+	/**
+	 * Environment tries to create smart card object.
+	 */
 	public TestLock() {
 		try {
 			SmartCard.start();
@@ -24,16 +25,12 @@ public class TestLock implements IEnvironment,CTListener {
 			request.setTimeout(10);
 			this.smartCard = SmartCard.waitForCard(request);
 		} catch (OpenCardPropertyLoadingException e) {
-			// TODO Automatisch erstellter Catch-Block
 			e.printStackTrace();
 		} catch (CardServiceException e) {
-			// TODO Automatisch erstellter Catch-Block
 			e.printStackTrace();
 		} catch (CardTerminalException e) {
-			// TODO Automatisch erstellter Catch-Block
 			e.printStackTrace();
 		} catch (ClassNotFoundException e) {
-			// TODO Automatisch erstellter Catch-Block
 			e.printStackTrace();
 		}
 		
@@ -46,15 +43,4 @@ public class TestLock implements IEnvironment,CTListener {
 	public SmartCard getSmartCard() {
 		return this.smartCard;
 	}
-
-	public void cardInserted(CardTerminalEvent arg0) throws CardTerminalException {
-		// TODO Automatisch erstellter Methoden-Stub
-		
-	}
-
-	public void cardRemoved(CardTerminalEvent arg0) throws CardTerminalException {
-		// TODO Automatisch erstellter Methoden-Stub
-		
-	}
-
 }

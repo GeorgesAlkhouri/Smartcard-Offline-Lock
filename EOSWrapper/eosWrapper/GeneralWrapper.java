@@ -1,6 +1,5 @@
 package eosWrapper;
 
-import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.security.InvalidAlgorithmParameterException;
@@ -24,7 +23,6 @@ import opencard.core.terminal.CardTerminalException;
 import opencard.core.terminal.CommandAPDU;
 import opencard.core.terminal.ResponseAPDU;
 import opencard.core.util.HexString;
-
 import eosWrapper.AccessItem.AccessItem;
 import eosWrapper.AccessItem.IAccessItem;
 import eosWrapper.Identity.GuestIdentity;
@@ -64,92 +62,138 @@ public class GeneralWrapper extends CardService {
 	
 	private byte[] validateNonce;
 
+	/*
+	 * 
+	 * Please consult the documentation for the usage
+	 * of the public API.
+	 * 
+	 * */
 	
-	public void selectApplet() throws Exception {
+	public void selectApplet() {
 		CommandAPDU select = new CommandAPDU(SELECT);
-		ResponseAPDU response = sendCommandAPDU(select);
-		processResponseAPDU(response);
+		try {
+			ResponseAPDU response = sendCommandAPDU(select);
+			processResponseAPDU(response);
+		}  catch (Exception e) {
+			System.out.println(e.getMessage());
+		}
+
 	}
 	
-	public boolean shouldOpen(IAccessItem item, WeekDay day) throws Exception {
-		return shouldOpen(item.getIdentity(), day);
+	public boolean shouldOpen(IAccessItem id, WeekDay day) {
+		try {
+			return shouldOpen(id.getIdentity(), day);
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+			return false;
+		}
 	}
 
-	public boolean shouldOpen(IIdentity id, WeekDay day) throws Exception {
+	public boolean shouldOpen(IIdentity id, WeekDay day) {
 		byte[] apdu = concat(
 				CLA_BYTE,
 				INS_SHOULD_OPEN,
-				new byte[]{(byte)day.convertWeekDay()},
+				new byte[]{(byte)day.shiftWeekDay()},
 				new byte[]{0x00,0x08},
 				id.getToken().getBytes(Charset.forName("US-ASCII")),
 				new byte[]{0x01});
-		byte[] commandNonce = requestNonce();
-		CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
-		ResponseAPDU response = sendCommandAPDU(command);
-		byte[] result = processResponseAPDU(response);
-		if (result[0] == 1)
-			return true;
-		else
+//		String debug = HexString.hexify(apdu);
+		try {
+			byte[] commandNonce = requestNonce();
+			CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
+			ResponseAPDU response = sendCommandAPDU(command);
+			byte[] result = processResponseAPDU(response);
+			if (result[0] == 1)
+				return true;
+			else
+				return false;
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
 			return false;
+		}
 	}
 	
-	public boolean shouldOpen(WeekDay day) throws Exception {
+	public boolean shouldOpen(WeekDay day) {
 		byte[] apdu = concat(
 				CLA_BYTE,
 				INS_SHOULD_OPEN_GLOBAL,
-				new byte[] {(byte)day.convertWeekDay()},
+				new byte[]{(byte)day.shiftWeekDay()},
 				new byte[] {(byte)0x00}
 				);
-		byte[] commandNonce = requestNonce();
-		CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
-		ResponseAPDU response = sendCommandAPDU(command);
-		byte[] result = processResponseAPDU(response);
-		if (result[0] == 1)
-			return true;
-		else
+//		String debug = HexString.hexify(apdu);
+		try {
+			byte[] commandNonce = requestNonce();
+			CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
+			ResponseAPDU response = sendCommandAPDU(command);
+			byte[] result = processResponseAPDU(response);
+			if (result[0] == 1)
+				return true;
+			else
+				return false;
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
 			return false;
+		}
 	}
 	
-	public void setGlobalAcsess(IAccessItem admin, List<WeekDay> days) throws Exception {
-		setGlobalAcsess(admin.getIdentity(),days);
+	public void setGlobalAcsess(IAccessItem admin, List<WeekDay> days) {
+		try {
+			setGlobalAcsess(admin.getIdentity(),days);
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+		}
 	}
 	
-	public void setGlobalAcsess(IIdentity admin, List<WeekDay> days) throws Exception {
+	public void setGlobalAcsess(IIdentity admin, List<WeekDay> days)  {
 		byte[] apdu = concat(
 				CLA_BYTE,
 				INS_SET_GLOBAL_ACCESS,
 				new byte[]{(byte)WeekDay.convertWeekDays(days)},
 				new byte[]{(byte)0x00,(byte)0x08},
-				admin.getToken().getBytes(Charset.forName("US-ASCII"))
-				);
-		byte[] commandNonce = requestNonce();
-		CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
-		ResponseAPDU response = sendCommandAPDU(command);
-		processResponseAPDU(response);	
+				admin.getToken().getBytes(Charset.forName("US-ASCII")));
+//		String debug = HexString.hexify(apdu);
+		try {
+			byte[] commandNonce = requestNonce();
+			CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
+			ResponseAPDU response = sendCommandAPDU(command);
+			processResponseAPDU(response);	
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+		}	
 	}
 	
-	public List<WeekDay> getGlobalAccess(IAccessItem admin) throws Exception{
-		return getGlobalAccess(admin.getIdentity());
+	public List<WeekDay> getGlobalAccess(IAccessItem admin) {
+		try {
+			return getGlobalAccess(admin.getIdentity());
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+			return null;
+		}
 	}
 	
-	public List<WeekDay> getGlobalAccess(IIdentity admin) throws Exception{
+	public List<WeekDay> getGlobalAccess(IIdentity admin) {
 		byte[] apdu = concat(
 				CLA_BYTE,
 				INS_GET_GLOBAL_ACCESS,
 				new byte[] {(byte)0x00},
 				new byte[]{(byte)0x00,(byte)0x08},
 				admin.getToken().getBytes(Charset.forName("US-ASCII")),
-				new byte[] {(byte)0x01}
-				);
-		byte[] commandNonce = requestNonce();
-		CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
-		ResponseAPDU response = sendCommandAPDU(command);
-		byte[] result = processResponseAPDU(response);
-		
-		return WeekDay.convertWeekDays(result[0]& 0xff);
+				new byte[] {(byte)0x01});
+//		String debug = HexString.hexify(apdu);
+		try {
+			byte[] commandNonce = requestNonce();
+			CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
+			ResponseAPDU response = sendCommandAPDU(command);
+			byte[] result = processResponseAPDU(response);
+			
+			return WeekDay.convertWeekDays(result[0]& 0xff);
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+			return null;
+		}
 	}
 	
-	public void createAccessItem(IIdentity admin, IAccessItem item) throws Exception {
+	public void createAccessItem(IIdentity admin, IAccessItem item) {
 		byte[] apdu = concat(
 				CLA_BYTE,
 				INS_PUT_ACCESS_ITEM,
@@ -157,38 +201,51 @@ public class GeneralWrapper extends CardService {
 				new byte[]{(byte)0x00,(byte)0x11},
 				admin.getToken().getBytes(Charset.forName("US-ASCII")),
 				item.getIdentity().getToken().getBytes(Charset.forName("US-ASCII")),
-				new byte[]{(byte)WeekDay.convertWeekDays(item.getWeekDays())}
-				);
-		byte[] commandNonce = requestNonce();
-		CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
-		ResponseAPDU response = sendCommandAPDU(command);
-		processResponseAPDU(response);
+				new byte[]{(byte)WeekDay.convertWeekDays(item.getWeekDays())});
+//		String debug = HexString.hexify(apdu);
+		try {
+			byte[] commandNonce = requestNonce();
+			CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
+			ResponseAPDU response = sendCommandAPDU(command);
+			processResponseAPDU(response);
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+		}
 	}
 	
-	public void createAccessItems(IIdentity admin, List<IAccessItem> items) throws Exception {
+	public void createAccessItems(IIdentity admin, List<IAccessItem> items) {
 		for (IAccessItem item : items) {
 			createAccessItem(admin, item);
 		}
 	}
 	
-	public List<WeekDay> getWeekdays(IIdentity admin, IIdentity id) throws Exception {
+	public List<WeekDay> getWeekdays(IIdentity admin, IIdentity id) {
 		byte[] apdu = concat(
 				CLA_BYTE,
 				INS_GET_WEEKDAYS,
 				new byte[] {(byte)0x00},
 				new byte[]{(byte)0x00,(byte)0x10},
-				id.getToken().getBytes(Charset.forName("US-ASCII")),
+				admin.getToken().getBytes(Charset.forName("US-ASCII")),
 				id.getToken().getBytes(Charset.forName("US-ASCII")),
 				new byte[] {(byte)0x00});
-		byte[] commandNonce = requestNonce();
-		CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
-		ResponseAPDU response = sendCommandAPDU(command);
-		byte[] result = processResponseAPDU(response);
-		return WeekDay.convertWeekDays(result[0]& 0xff);
+//		String debug = HexString.hexify(apdu);
+		try {
+			byte[] commandNonce = requestNonce();
+			CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
+			ResponseAPDU response = sendCommandAPDU(command);
+			byte[] result = processResponseAPDU(response);
+			
+			return WeekDay.convertWeekDays(result[0]& 0xff);
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+			return null;
+		}
 	}
 	
-	public List<IIdentity> getAllIdentities(IIdentity admin) throws Exception {
+	public List<IIdentity> getAllIdentities(IIdentity admin)  {
 		List<IAccessItem> items = getAllAccessItems(admin);
+		if (items == null)
+			return null;
 		List<IIdentity> identities = new ArrayList<IIdentity>();
 		for (IAccessItem item : items) {
 			identities.add(item.getIdentity());
@@ -196,43 +253,56 @@ public class GeneralWrapper extends CardService {
 		return identities;
 	}
 	
-	public List<IAccessItem> getAllAccessItems(IIdentity admin) throws Exception {
-		byte[] result = getMaxSize(admin);
-		int maxSize = result[0] + result[1];
-		ArrayList<IAccessItem> items = new ArrayList<IAccessItem>();
-		for (int i = 0; i < maxSize; i++) {
-			byte[] temp = ByteBuffer.allocate(4).putInt(i).array(); 
-			IAccessItem item = getAccessItemAtPosition(admin,Arrays.copyOfRange(temp,2,4));
-			if (item != null)
-				items.add(item);
+	public List<IAccessItem> getAllAccessItems(IIdentity admin) {
+		try {
+			byte[] result = getMaxSize(admin);
+			if (result == null)
+				return null;
+			
+			int maxSize = result[0] + result[1];
+			ArrayList<IAccessItem> items = new ArrayList<IAccessItem>();
+			for (int i = 0; i < maxSize; i++) {
+				byte[] temp = ByteBuffer.allocate(4).putInt(i).array(); 
+				IAccessItem item = getAccessItemAtPosition(admin,Arrays.copyOfRange(temp,2,4));
+				if (item != null)
+					items.add(item);
+			}
+			
+			return items;
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+			return null;
 		}
-		return items;
 	}
 	
-	private IAccessItem getAccessItemAtPosition(IIdentity admin, byte[] position) throws Exception {
+	private IAccessItem getAccessItemAtPosition(IIdentity admin, byte[] position) {
 		byte[] apdu = concat(
 				CLA_BYTE,
 				INS_GET_ACCESS_ITEM_AT_POS,
 				position,
 				new byte[]{(byte)0x08},
 				admin.getToken().getBytes(Charset.forName("US-ASCII")),
-				new byte[] {(byte)0x09}
-				);
-//		String d = HexString.hexify(apdu);
-		byte[] commandNonce = requestNonce();
-		CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
-		ResponseAPDU response = sendCommandAPDU(command);
-		byte[] result = processResponseAPDU(response);
-		if (result == null)
+				new byte[] {(byte)0x09});
+//		String debug = HexString.hexify(apdu);
+		try {
+			byte[] commandNonce = requestNonce();
+			CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
+			ResponseAPDU response = sendCommandAPDU(command);
+			byte[] result = processResponseAPDU(response);
+			if (result == null)
+				return null;
+			String token = convertHexToASCII(Arrays.copyOfRange(result,0,7));
+			List<WeekDay> days = WeekDay.convertWeekDays(result[8]& 0xff);
+			
+			IAccessItem item = new AccessItem(new GuestIdentity(token),days);
+			return item;
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
 			return null;
-		String token = convertHexToASCII(Arrays.copyOfRange(result,0,7));
-		List<WeekDay> days = WeekDay.convertWeekDays(result[8]& 0xff);
-		
-		IAccessItem item = new AccessItem(new GuestIdentity(token),days);
-		return item;
+		}
 	}
 	
-	private byte[] getMaxSize(IIdentity admin) throws Exception{
+	private byte[] getMaxSize(IIdentity admin) {
 		byte[] apdu = concat(
 				CLA_BYTE,
 				INS_GET_MAX_SIZE,
@@ -241,18 +311,24 @@ public class GeneralWrapper extends CardService {
 				admin.getToken().getBytes(Charset.forName("US-ASCII")),
 				new byte[] {(byte)0x02}
 				);
-		String d = HexString.hexify(apdu);
-		byte[] commandNonce = requestNonce();
-		CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
-		ResponseAPDU response = sendCommandAPDU(command);
-		return processResponseAPDU(response);
+//		String debug = HexString.hexify(apdu);
+		try {
+			byte[] commandNonce = requestNonce();
+			CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
+			ResponseAPDU response = sendCommandAPDU(command);
+			
+			return processResponseAPDU(response);
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+			return null;
+		}
 	}
 		
-	public void updateAccessItem(IIdentity admin, IAccessItem item) throws Exception {
+	public void updateAccessItem(IIdentity admin, IAccessItem item) {
 		createAccessItem(admin,item);
 	}
 	
-	public void removeAccessItem(IIdentity admin, IAccessItem item) throws Exception {
+	public void removeAccessItem(IIdentity admin, IAccessItem item) {
 		byte[] apdu = concat(
 				CLA_BYTE,
 				INS_REMOVE_ACCESS_ITEM,
@@ -261,13 +337,18 @@ public class GeneralWrapper extends CardService {
 				admin.getToken().getBytes(Charset.forName("US-ASCII")),
 				item.getIdentity().getToken().getBytes(Charset.forName("US-ASCII"))
 				);
-		byte[] commandNonce = requestNonce();
-		CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
-		ResponseAPDU response = sendCommandAPDU(command);
-		processResponseAPDU(response);
+//		String debug = HexString.hexify(apdu);
+		try {
+			byte[] commandNonce = requestNonce();
+			CommandAPDU command = createCommandAPDU(commandNonce,createNonce(2),apdu);
+			ResponseAPDU response = sendCommandAPDU(command);
+			processResponseAPDU(response);
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+		}
 	}
 	
-	public void removeAccessItems(IIdentity admin, List<IAccessItem> items) throws Exception {
+	public void removeAccessItems(IIdentity admin, List<IAccessItem> items) {
 		for (IAccessItem item : items) {
 			removeAccessItem(admin,item);
 		}
@@ -288,6 +369,7 @@ public class GeneralWrapper extends CardService {
 				INS_GET_COMMAND_NONCE,
 				INIT_NONCE,
 				new byte[]{0x02});
+//		String debug = HexString.hexify(apdu);
 		CommandAPDU command = createCommandAPDU(INIT_NONCE, createNonce(2), apdu);
 		ResponseAPDU response = sendCommandAPDU(command);
 		byte[] nonce = processResponseAPDU(response);
@@ -310,8 +392,6 @@ public class GeneralWrapper extends CardService {
 		this.validateNonce = responseNonce;
 			
 		int toFill = 64 - (commandNonce.length + responseNonce.length + commandAPDU.length);
-		byte[] debug = concat(commandNonce,responseNonce,commandAPDU,new byte[toFill]);
-		String d = HexString.hexify(debug);
 		
 		byte[] encrypted;
 		if (toFill > 0)
@@ -320,8 +400,6 @@ public class GeneralWrapper extends CardService {
 			encrypted = encrypt(concat(commandNonce,responseNonce,commandAPDU));
 		
 		byte[] finale = concat(new byte[]{(byte)(encrypted.length * 2)},encrypted);
-		
-		String dd = HexString.hexify(finale);
 		return new CommandAPDU(finale);
 	}
 	
@@ -366,7 +444,6 @@ public class GeneralWrapper extends CardService {
 				return new byte[0];
 			
 			byte[] decrypted = decrypt(response.data());
-			String as = HexString.hexify(decrypted);
 			byte[] responceNonce = Arrays.copyOfRange(decrypted,0,2);
 			if (validateNonce(responceNonce)) {
 				byte[] data = Arrays.copyOfRange(decrypted,2,decrypted.length);
@@ -448,9 +525,7 @@ public class GeneralWrapper extends CardService {
 		return crypted;
 	}
 	
-	
-	//Util
-	
+	//Utility methods
 	
 	/**
 	 * Creates an exception for an error code.
@@ -461,7 +536,7 @@ public class GeneralWrapper extends CardService {
 		if (error.equalsIgnoreCase("6700"))
 			return new Exception("Wrong data length.");
 		else if (error.equalsIgnoreCase("6a80"))
-			return new Exception("No admin.");
+			return new Exception("No admin/Invalid current weekday:");
 		else if (error.equalsIgnoreCase("6f00"))
 			return new Exception("Datastructur is full.");
 		else
@@ -508,6 +583,11 @@ public class GeneralWrapper extends CardService {
 			return Arrays.copyOfRange(a,0,count + 1);
 	}
 	
+	/**
+	 * Converts a hex sring to a ASCII representation.
+	 * @param hex
+	 * @return
+	 */
 	private String convertHexToASCII(byte[] hex) {
 		String hexString = HexString.hexify(hex).replace(" ","");
 		   StringBuilder output = new StringBuilder();
