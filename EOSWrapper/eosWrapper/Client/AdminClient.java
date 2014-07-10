@@ -60,7 +60,7 @@ public class AdminClient implements IClient {
 		
 		System.out.println("Set global access");
 		
-		service.setGlobalAcsess(this.id, Arrays.asList(
+		service.setGlobalAccess(this.id, Arrays.asList(
 						new WeekDay[]{WeekDay.FRIDAY,WeekDay.WEDNESDAY,WeekDay.THURSDAY}
 				));
 		

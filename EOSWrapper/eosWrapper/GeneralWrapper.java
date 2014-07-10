@@ -136,15 +136,15 @@ public class GeneralWrapper extends CardService {
 		}
 	}
 	
-	public void setGlobalAcsess(IAccessItem admin, List<WeekDay> days) {
+	public void setGlobalAccess(IAccessItem admin, List<WeekDay> days) {
 		try {
-			setGlobalAcsess(admin.getIdentity(),days);
+			setGlobalAccess(admin.getIdentity(),days);
 		} catch (Exception e) {
 			System.out.println(e.getMessage());
 		}
 	}
 	
-	public void setGlobalAcsess(IIdentity admin, List<WeekDay> days)  {
+	public void setGlobalAccess(IIdentity admin, List<WeekDay> days)  {
 		byte[] apdu = concat(
 				CLA_BYTE,
 				INS_SET_GLOBAL_ACCESS,
